@@ -2,7 +2,7 @@
 \i scheduler.sql
 \i locks.sql
 \i signals.sql
-\i userrolespermissions.sql
+\i usersrolespermissions.sql
 \i memory.sql
 \i fs.sql
 \i ipc.sql
