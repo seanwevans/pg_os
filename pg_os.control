@@ -1,0 +1,3 @@
+comment = 'Operating system utilities via SQL'
+default_version = '1.0'
+relocatable = true

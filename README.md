@@ -30,9 +30,11 @@ The extension bridges the gap between the database and the underlying OS, allowi
    ```bash
    git clone https://github.com/your-repo/pg_os.git
    ```
-2. Copy the SQL files to your PostgreSQL extensions directory:
+2. Build and install the extension using PGXS:
    ```bash
-   cp *.sql /usr/share/postgresql/extension/
+   cd pg_os
+   make
+   sudo make install
    ```
 3. Connect to your PostgreSQL instance:
    ```bash
@@ -138,6 +140,8 @@ SELECT * FROM os_users_roles_permissions();
 - `signals.sql` – Manages system signals.
 - `gc.sql` – Monitors and controls garbage collection.
 - `modules.sql` – Manages system modules.
+- `pg_os--1.0.sql` – Extension script combining all modules.
+- `pg_os.control` – Extension control file.
 
 ## Contributing
 Contributions are welcome! Please open an issue or submit a pull request with any improvements or bug fixes.
