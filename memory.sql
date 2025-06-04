@@ -57,7 +57,8 @@ BEGIN
         -- Transaction block for atomic allocation
         PERFORM pg_advisory_lock(1);  -- simulate locking, ensure no other transaction interferes
         UPDATE memory_segments SET allocated = TRUE, allocated_to = process_id WHERE id = mem_seg.id;
-        INSERT INTO process_memory (process_id, segment_id) VALUES (process_id, mem_seg.id);
+        INSERT INTO process_memory (process_id, segment_id)
+            VALUES (allocate_memory.process_id, mem_seg.id);
         PERFORM pg_advisory_unlock(1);
 
         -- Log the allocation
@@ -78,8 +79,12 @@ BEGIN
         RAISE EXCEPTION 'User % does not have permission to free memory', user_id;
     END IF;
 
-    DELETE FROM process_memory WHERE process_id = process_id AND segment_id = segment_id;
-    UPDATE memory_segments SET allocated = FALSE, allocated_to = NULL WHERE id = segment_id;
+    DELETE FROM process_memory
+        WHERE process_id = free_memory.process_id
+          AND segment_id = free_memory.segment_id;
+    UPDATE memory_segments
+        SET allocated = FALSE, allocated_to = NULL
+        WHERE id = free_memory.segment_id;
     PERFORM log_process_action(process_id, 'Memory freed: segment ' || segment_id);
 END;
 $$ LANGUAGE plpgsql;
@@ -98,7 +103,8 @@ BEGIN
 
     virtual_addr := floor(random()*1000000)::BIGINT;
     UPDATE pages SET allocated=TRUE, allocated_to_thread=thread_id WHERE id=p.id;
-    INSERT INTO page_tables (thread_id, page_id, virtual_address) VALUES (thread_id, p.id, virtual_addr);
+    INSERT INTO page_tables (thread_id, page_id, virtual_address)
+        VALUES (allocate_page.thread_id, p.id, virtual_addr);
 
     RETURN virtual_addr;
 END;
