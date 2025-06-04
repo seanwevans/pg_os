@@ -26,33 +26,6 @@ CREATE TABLE IF NOT EXISTS threads (
 -- Insert a default configuration (priority-based)
 INSERT INTO scheduler_config (policy) VALUES ('priority')
 ON CONFLICT DO NOTHING;
-
-
--- simple scheduler to execute processes based on priority
-CREATE OR REPLACE FUNCTION schedule_processes() RETURNS VOID AS $$
-DECLARE
-    next_process RECORD;
-BEGIN
-    LOOP
-        -- Find the next process in the 'ready' state, ordered by priority and creation time
-        SELECT * INTO next_process
-        FROM processes
-        WHERE state = 'ready'
-        ORDER BY priority DESC, created_at
-        LIMIT 1;
-
-        -- Exit if no ready processes are found
-        IF NOT FOUND THEN
-            EXIT;
-        END IF;
-
-        -- Execute the process
-        PERFORM execute_process(next_process.id);
-    END LOOP;
-END;
-$$ LANGUAGE plpgsql;
-
-
 -- Modified scheduler function with switch based on policy
 CREATE OR REPLACE FUNCTION schedule_processes() RETURNS VOID AS $$
 DECLARE
