@@ -147,5 +147,5 @@ SELECT * FROM os_users_roles_permissions();
 Contributions are welcome! Please open an issue or submit a pull request with any improvements or bug fixes.
 
 ## License
-MIT License. See `LICENSE` for more details.
+This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
 
