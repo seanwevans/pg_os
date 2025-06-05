@@ -152,7 +152,9 @@ $$ LANGUAGE plpgsql;
 -- Unlock a file
 CREATE OR REPLACE FUNCTION unlock_file(user_id INTEGER, file_id INTEGER) RETURNS VOID AS $$
 BEGIN
-    DELETE FROM file_locks WHERE file_id=file_id AND locked_by_user=user_id;
+    DELETE FROM file_locks
+        WHERE file_id = unlock_file.file_id
+          AND locked_by_user = user_id;
 END;
 $$ LANGUAGE plpgsql;
 
@@ -168,7 +170,10 @@ BEGIN
         RAISE EXCEPTION 'File not found';
     END IF;
 
-    SELECT COALESCE(MAX(version_number),0) INTO max_version FROM file_versions WHERE file_id=file_id;
-    INSERT INTO file_versions (file_id, version_number, contents) VALUES (file_id, max_version+1, f.contents);
+    SELECT COALESCE(MAX(version_number),0) INTO max_version
+        FROM file_versions
+        WHERE file_versions.file_id = version_file.file_id;
+    INSERT INTO file_versions (file_id, version_number, contents)
+        VALUES (file_id, max_version+1, f.contents);
 END;
 $$ LANGUAGE plpgsql;
