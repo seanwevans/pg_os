@@ -1,8 +1,8 @@
+\i usersrolespermissions.sql
 \i processes.sql
 \i scheduler.sql
 \i locks.sql
 \i signals.sql
-\i usersrolespermissions.sql
 \i memory.sql
 \i fs.sql
 \i ipc.sql
