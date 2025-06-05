@@ -1,0 +1,20 @@
+# PostgreSQL extension build artifacts
+*.so
+*.o
+*.lo
+*.la
+*.sl
+*.dll
+*.log
+*.diffs
+*.out
+!expected/*.out
+
+# Regression test outputs
+/results/
+/tmp_check/
+
+# Backup and temp files
+*~
+*.swp
+*.swo
