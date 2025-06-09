@@ -1,3 +1,126 @@
+-- USER, ROLES & PERMISSIONS
+-----------------------------
+
+
+-- users
+CREATE TABLE IF NOT EXISTS users (
+    id SERIAL PRIMARY KEY,
+    username TEXT UNIQUE NOT NULL,
+    created_at TIMESTAMP DEFAULT now()
+);
+
+-- roles
+CREATE TABLE IF NOT EXISTS roles (
+    id SERIAL PRIMARY KEY,
+    role_name TEXT UNIQUE NOT NULL
+);
+
+-- user roles
+CREATE TABLE IF NOT EXISTS user_roles (
+    user_id INTEGER NOT NULL REFERENCES users(id),
+    role_id INTEGER NOT NULL REFERENCES roles(id),
+    PRIMARY KEY (user_id, role_id)
+);
+
+-- permissions
+CREATE TABLE IF NOT EXISTS permissions (
+    id SERIAL PRIMARY KEY,
+    role_id INTEGER NOT NULL REFERENCES roles(id),
+    resource_type TEXT NOT NULL CHECK (resource_type IN ('process', 'file', 'resource', 'memory')),
+    action TEXT NOT NULL CHECK (action IN ('read','write','execute','allocate','delete'))
+);
+
+-- groups
+CREATE TABLE IF NOT EXISTS groups (
+    id SERIAL PRIMARY KEY,
+    group_name TEXT UNIQUE NOT NULL
+);
+
+-- user groups
+CREATE TABLE IF NOT EXISTS user_groups (
+    user_id INTEGER REFERENCES users(id),
+    group_id INTEGER REFERENCES groups(id),
+    PRIMARY KEY(user_id, group_id)
+);
+
+-- group permissions
+CREATE TABLE IF NOT EXISTS group_permissions (
+    id SERIAL PRIMARY KEY,
+    group_id INTEGER REFERENCES groups(id),
+    resource_type TEXT NOT NULL CHECK (resource_type IN ('process', 'file', 'resource', 'memory')),
+    action TEXT NOT NULL CHECK (action IN ('read','write','execute','allocate','delete'))
+);
+
+
+
+-- create a user
+CREATE OR REPLACE FUNCTION create_user(name TEXT) RETURNS INTEGER AS $$
+DECLARE
+    new_user_id INTEGER;
+BEGIN
+    INSERT INTO users (username) VALUES (name) RETURNING id INTO new_user_id;
+    RETURN new_user_id;
+END;
+$$ LANGUAGE plpgsql;
+
+
+-- create a role
+CREATE OR REPLACE FUNCTION create_role(role_name TEXT) RETURNS INTEGER AS $$
+DECLARE
+    new_role_id INTEGER;
+BEGIN
+    INSERT INTO roles (role_name) VALUES (role_name) RETURNING id INTO new_role_id;
+    RETURN new_role_id;
+END;
+$$ LANGUAGE plpgsql;
+
+
+-- Assign a role to a user
+CREATE OR REPLACE FUNCTION assign_role_to_user(user_id INTEGER, role_id INTEGER) RETURNS VOID AS $$
+BEGIN
+    INSERT INTO user_roles (user_id, role_id) VALUES (user_id, role_id);
+END;
+$$ LANGUAGE plpgsql;
+
+
+-- Grant permission to a role
+CREATE OR REPLACE FUNCTION grant_permission_to_role(role_id INTEGER, resource_type TEXT, action TEXT) RETURNS VOID AS $$
+BEGIN
+    INSERT INTO permissions (role_id, resource_type, action) VALUES (role_id, resource_type, action);
+END;
+$$ LANGUAGE plpgsql;
+
+
+-- check permissions
+CREATE OR REPLACE FUNCTION check_permission(user_id INTEGER, resource_type TEXT, action TEXT) RETURNS BOOLEAN AS $$
+DECLARE
+    allowed BOOLEAN;
+BEGIN
+    -- First check user roles
+    SELECT TRUE INTO allowed
+    FROM user_roles ur
+    JOIN permissions p ON ur.role_id = p.role_id
+    WHERE ur.user_id = user_id
+      AND p.resource_type = resource_type
+      AND p.action = action
+    LIMIT 1;
+
+    IF allowed THEN
+        RETURN TRUE;
+    END IF;
+
+    -- If not allowed by user roles, check group permissions
+    SELECT TRUE INTO allowed
+    FROM user_groups ug
+    JOIN group_permissions gp ON ug.group_id = gp.group_id
+    WHERE ug.user_id = user_id
+      AND gp.resource_type = resource_type
+      AND gp.action = action
+    LIMIT 1;
+
+    RETURN COALESCE(allowed, FALSE);
+END;
+$$ LANGUAGE plpgsql;
 -------------
 -- PROCESSES
 -------------
@@ -22,8 +145,12 @@ CREATE TABLE IF NOT EXISTS process_logs (
     timestamp TIMESTAMP DEFAULT now()
 );
 
-
-
+-- log process
+CREATE OR REPLACE FUNCTION log_process_action(process_id INTEGER, action TEXT) RETURNS VOID AS $$
+BEGIN
+    INSERT INTO process_logs (process_id, action) VALUES (process_id, action);
+END;
+$$ LANGUAGE plpgsql;
 
 -- create a process
 CREATE OR REPLACE PROCEDURE create_process(
@@ -218,14 +345,6 @@ END;
 $$ LANGUAGE plpgsql;
 
 
--- log process
-CREATE OR REPLACE FUNCTION log_process_action(process_id INTEGER, action TEXT) RETURNS VOID AS $$
-BEGIN
-    INSERT INTO process_logs (process_id, action) VALUES (process_id, action);
-END;
-$$ LANGUAGE plpgsql;
-
-
 -- count states
 CREATE OR REPLACE FUNCTION process_count_by_state() RETURNS TABLE(state TEXT, count INTEGER) AS $$
 BEGIN
@@ -279,33 +398,6 @@ CREATE TABLE IF NOT EXISTS threads (
 -- Insert a default configuration (priority-based)
 INSERT INTO scheduler_config (policy) VALUES ('priority')
 ON CONFLICT DO NOTHING;
-
-
--- simple scheduler to execute processes based on priority
-CREATE OR REPLACE FUNCTION schedule_processes() RETURNS VOID AS $$
-DECLARE
-    next_process RECORD;
-BEGIN
-    LOOP
-        -- Find the next process in the 'ready' state, ordered by priority and creation time
-        SELECT * INTO next_process
-        FROM processes
-        WHERE state = 'ready'
-        ORDER BY priority DESC, created_at
-        LIMIT 1;
-
-        -- Exit if no ready processes are found
-        IF NOT FOUND THEN
-            EXIT;
-        END IF;
-
-        -- Execute the process
-        PERFORM execute_process(next_process.id);
-    END LOOP;
-END;
-$$ LANGUAGE plpgsql;
-
-
 -- Modified scheduler function with switch based on policy
 CREATE OR REPLACE FUNCTION schedule_processes() RETURNS VOID AS $$
 DECLARE
@@ -568,129 +660,6 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 -----------------------------
--- USER, ROLES & PERMISSIONS
------------------------------
-
-
--- users
-CREATE TABLE IF NOT EXISTS users (
-    id SERIAL PRIMARY KEY,
-    username TEXT UNIQUE NOT NULL,
-    created_at TIMESTAMP DEFAULT now()
-);
-
--- roles
-CREATE TABLE IF NOT EXISTS roles (
-    id SERIAL PRIMARY KEY,
-    role_name TEXT UNIQUE NOT NULL
-);
-
--- user roles
-CREATE TABLE IF NOT EXISTS user_roles (
-    user_id INTEGER NOT NULL REFERENCES users(id),
-    role_id INTEGER NOT NULL REFERENCES roles(id),
-    PRIMARY KEY (user_id, role_id)
-);
-
--- permissions
-CREATE TABLE IF NOT EXISTS permissions (
-    id SERIAL PRIMARY KEY,
-    role_id INTEGER NOT NULL REFERENCES roles(id),
-    resource_type TEXT NOT NULL CHECK (resource_type IN ('process', 'file', 'resource', 'memory')),
-    action TEXT NOT NULL CHECK (action IN ('read','write','execute','allocate','delete'))
-);
-
--- groups
-CREATE TABLE IF NOT EXISTS groups (
-    id SERIAL PRIMARY KEY,
-    group_name TEXT UNIQUE NOT NULL
-);
-
--- user groups
-CREATE TABLE IF NOT EXISTS user_groups (
-    user_id INTEGER REFERENCES users(id),
-    group_id INTEGER REFERENCES groups(id),
-    PRIMARY KEY(user_id, group_id)
-);
-
--- group permissions
-CREATE TABLE IF NOT EXISTS group_permissions (
-    id SERIAL PRIMARY KEY,
-    group_id INTEGER REFERENCES groups(id),
-    resource_type TEXT NOT NULL CHECK (resource_type IN ('process', 'file', 'resource', 'memory')),
-    action TEXT NOT NULL CHECK (action IN ('read','write','execute','allocate','delete'))
-);
-
-
-
--- create a user
-CREATE OR REPLACE FUNCTION create_user(name TEXT) RETURNS INTEGER AS $$
-DECLARE
-    new_user_id INTEGER;
-BEGIN
-    INSERT INTO users (username) VALUES (name) RETURNING id INTO new_user_id;
-    RETURN new_user_id;
-END;
-$$ LANGUAGE plpgsql;
-
-
--- create a role
-CREATE OR REPLACE FUNCTION create_role(role_name TEXT) RETURNS INTEGER AS $$
-DECLARE
-    new_role_id INTEGER;
-BEGIN
-    INSERT INTO roles (role_name) VALUES (role_name) RETURNING id INTO new_role_id;
-    RETURN new_role_id;
-END;
-$$ LANGUAGE plpgsql;
-
-
--- Assign a role to a user
-CREATE OR REPLACE FUNCTION assign_role_to_user(user_id INTEGER, role_id INTEGER) RETURNS VOID AS $$
-BEGIN
-    INSERT INTO user_roles (user_id, role_id) VALUES (user_id, role_id);
-END;
-$$ LANGUAGE plpgsql;
-
-
--- Grant permission to a role
-CREATE OR REPLACE FUNCTION grant_permission_to_role(role_id INTEGER, resource_type TEXT, action TEXT) RETURNS VOID AS $$
-BEGIN
-    INSERT INTO permissions (role_id, resource_type, action) VALUES (role_id, resource_type, action);
-END;
-$$ LANGUAGE plpgsql;
-
-
--- check permissions
-CREATE OR REPLACE FUNCTION check_permission(user_id INTEGER, resource_type TEXT, action TEXT) RETURNS BOOLEAN AS $$
-DECLARE
-    allowed BOOLEAN;
-BEGIN
-    -- First check user roles
-    SELECT TRUE INTO allowed
-    FROM user_roles ur
-    JOIN permissions p ON ur.role_id = p.role_id
-    WHERE ur.user_id = user_id
-      AND p.resource_type = resource_type
-      AND p.action = action
-    LIMIT 1;
-
-    IF allowed THEN
-        RETURN TRUE;
-    END IF;
-
-    -- If not allowed by user roles, check group permissions
-    SELECT TRUE INTO allowed
-    FROM user_groups ug
-    JOIN group_permissions gp ON ug.group_id = gp.group_id
-    WHERE ug.user_id = user_id
-      AND gp.resource_type = resource_type
-      AND gp.action = action
-    LIMIT 1;
-
-    RETURN COALESCE(allowed, FALSE);
-END;
-$$ LANGUAGE plpgsql;
 ----------
 -- MEMORY
 ----------
@@ -727,6 +696,21 @@ CREATE TABLE IF NOT EXISTS process_memory (
     segment_id INTEGER REFERENCES memory_segments(id),
     PRIMARY KEY (process_id, segment_id)
 );
+-- memory logs
+CREATE TABLE IF NOT EXISTS memory_logs (
+    id SERIAL PRIMARY KEY,
+    process_id INTEGER REFERENCES processes(id),
+    action TEXT NOT NULL,
+    performed_by INTEGER REFERENCES users(id),
+    segment_id INTEGER,
+    timestamp TIMESTAMP DEFAULT now()
+);
+-- log for memory
+CREATE OR REPLACE FUNCTION log_memory_action(process_id INTEGER, action TEXT, user_id INTEGER, segment_id INTEGER) RETURNS VOID AS $$
+BEGIN
+    INSERT INTO memory_logs (process_id, action, performed_by, segment_id) VALUES (process_id, action, user_id, segment_id);
+END;
+$$ LANGUAGE plpgsql;
 
 -- Similarly, for memory allocation, use transactions and more verbose errors
 CREATE OR REPLACE FUNCTION allocate_memory(user_id INTEGER, process_id INTEGER, segment_size INTEGER) RETURNS VOID AS $$
@@ -1086,15 +1070,6 @@ CREATE TABLE IF NOT EXISTS file_logs (
     timestamp TIMESTAMP DEFAULT now()
 );
 
--- memory logs
-CREATE TABLE IF NOT EXISTS memory_logs (
-    id SERIAL PRIMARY KEY,
-    process_id INTEGER REFERENCES processes(id),
-    action TEXT NOT NULL,
-    performed_by INTEGER REFERENCES users(id),
-    segment_id INTEGER,
-    timestamp TIMESTAMP DEFAULT now()
-);
 
 -- faults
 CREATE TABLE IF NOT EXISTS faults (
@@ -1122,21 +1097,8 @@ END;
 $$ LANGUAGE plpgsql;
 
 
--- log for memory
-CREATE OR REPLACE FUNCTION log_memory_action(process_id INTEGER, action TEXT, user_id INTEGER, segment_id INTEGER) RETURNS VOID AS $$
-BEGIN
-    INSERT INTO memory_logs (process_id, action, performed_by, segment_id) VALUES (process_id, action, user_id, segment_id);
-END;
-$$ LANGUAGE plpgsql;
 
 
-
-
-
--- Update file operations to log actions
-CREATE OR REPLACE FUNCTION write_file(user_id INTEGER, file_id INTEGER, data TEXT) RETURNS VOID AS $$
-DECLARE
-    f RECORD;
 BEGIN
     SELECT * INTO f FROM files WHERE id = file_id;
     IF NOT FOUND THEN
@@ -1176,6 +1138,17 @@ $$ LANGUAGE plpgsql;
 -- GARBAGE COLLECTION
 ----------------------
 
+-- Helper function to free all memory for a terminated process
+CREATE OR REPLACE FUNCTION free_all_memory_for_process(process_id INTEGER) RETURNS VOID AS $$
+DECLARE
+    seg_id INTEGER;
+BEGIN
+    FOR seg_id IN SELECT segment_id FROM process_memory WHERE process_id = process_id LOOP
+        UPDATE memory_segments SET allocated = FALSE, allocated_to = NULL WHERE id = seg_id;
+        DELETE FROM process_memory WHERE process_id = process_id AND segment_id = seg_id;
+    END LOOP;
+END;
+$$ LANGUAGE plpgsql;
 CREATE OR REPLACE FUNCTION cleanup_terminated_processes(timeout_interval INTERVAL DEFAULT '1 hour') RETURNS VOID AS $$
 DECLARE
     old_procs RECORD;
@@ -1200,17 +1173,6 @@ END;
 $$ LANGUAGE plpgsql;
 
 
--- Helper function to free all memory for a terminated process
-CREATE OR REPLACE FUNCTION free_all_memory_for_process(process_id INTEGER) RETURNS VOID AS $$
-DECLARE
-    seg_id INTEGER;
-BEGIN
-    FOR seg_id IN SELECT segment_id FROM process_memory WHERE process_id = process_id LOOP
-        UPDATE memory_segments SET allocated = FALSE, allocated_to = NULL WHERE id = seg_id;
-        DELETE FROM process_memory WHERE process_id = process_id AND segment_id = seg_id;
-    END LOOP;
-END;
-$$ LANGUAGE plpgsql;
 -------------------------
 -- DEVICE AND I/O MANAGEMENT
 -------------------------
