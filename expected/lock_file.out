@@ -1,0 +1,297 @@
+SET client_min_messages TO warning;
+\i :abs_srcdir/../usersrolespermissions.sql
+-----------------------------
+-- USER, ROLES & PERMISSIONS
+-----------------------------
+-- users
+CREATE TABLE IF NOT EXISTS users (
+    id SERIAL PRIMARY KEY,
+    username TEXT UNIQUE NOT NULL,
+    created_at TIMESTAMP DEFAULT now()
+);
+-- roles
+CREATE TABLE IF NOT EXISTS roles (
+    id SERIAL PRIMARY KEY,
+    role_name TEXT UNIQUE NOT NULL
+);
+-- user roles
+CREATE TABLE IF NOT EXISTS user_roles (
+    user_id INTEGER NOT NULL REFERENCES users(id),
+    role_id INTEGER NOT NULL REFERENCES roles(id),
+    PRIMARY KEY (user_id, role_id)
+);
+-- permissions
+CREATE TABLE IF NOT EXISTS permissions (
+    id SERIAL PRIMARY KEY,
+    role_id INTEGER NOT NULL REFERENCES roles(id),
+    resource_type TEXT NOT NULL CHECK (resource_type IN ('process', 'file', 'resource', 'memory')),
+    action TEXT NOT NULL CHECK (action IN ('read','write','execute','allocate','delete'))
+);
+-- groups
+CREATE TABLE IF NOT EXISTS groups (
+    id SERIAL PRIMARY KEY,
+    group_name TEXT UNIQUE NOT NULL
+);
+-- user groups
+CREATE TABLE IF NOT EXISTS user_groups (
+    user_id INTEGER REFERENCES users(id),
+    group_id INTEGER REFERENCES groups(id),
+    PRIMARY KEY(user_id, group_id)
+);
+-- group permissions
+CREATE TABLE IF NOT EXISTS group_permissions (
+    id SERIAL PRIMARY KEY,
+    group_id INTEGER REFERENCES groups(id),
+    resource_type TEXT NOT NULL CHECK (resource_type IN ('process', 'file', 'resource', 'memory')),
+    action TEXT NOT NULL CHECK (action IN ('read','write','execute','allocate','delete'))
+);
+-- create a user
+CREATE OR REPLACE FUNCTION create_user(name TEXT) RETURNS INTEGER AS $$
+DECLARE
+    new_user_id INTEGER;
+BEGIN
+    INSERT INTO users (username) VALUES (name) RETURNING id INTO new_user_id;
+    RETURN new_user_id;
+END;
+$$ LANGUAGE plpgsql;
+-- create a role
+CREATE OR REPLACE FUNCTION create_role(role_name TEXT) RETURNS INTEGER AS $$
+DECLARE
+    new_role_id INTEGER;
+BEGIN
+    INSERT INTO roles (role_name) VALUES (role_name) RETURNING id INTO new_role_id;
+    RETURN new_role_id;
+END;
+$$ LANGUAGE plpgsql;
+-- Assign a role to a user
+CREATE OR REPLACE FUNCTION assign_role_to_user(user_id INTEGER, role_id INTEGER) RETURNS VOID AS $$
+BEGIN
+    INSERT INTO user_roles (user_id, role_id) VALUES (user_id, role_id);
+END;
+$$ LANGUAGE plpgsql;
+-- Grant permission to a role
+CREATE OR REPLACE FUNCTION grant_permission_to_role(role_id INTEGER, resource_type TEXT, action TEXT) RETURNS VOID AS $$
+BEGIN
+    INSERT INTO permissions (role_id, resource_type, action) VALUES (role_id, resource_type, action);
+END;
+$$ LANGUAGE plpgsql;
+-- check permissions
+CREATE OR REPLACE FUNCTION check_permission(user_id INTEGER, resource_type TEXT, action TEXT) RETURNS BOOLEAN AS $$
+DECLARE
+    allowed BOOLEAN;
+BEGIN
+    -- First check user roles
+    SELECT TRUE INTO allowed
+    FROM user_roles ur
+    JOIN permissions p ON ur.role_id = p.role_id
+    WHERE ur.user_id = user_id
+      AND p.resource_type = resource_type
+      AND p.action = action
+    LIMIT 1;
+
+    IF allowed THEN
+        RETURN TRUE;
+    END IF;
+
+    -- If not allowed by user roles, check group permissions
+    SELECT TRUE INTO allowed
+    FROM user_groups ug
+    JOIN group_permissions gp ON ug.group_id = gp.group_id
+    WHERE ug.user_id = user_id
+      AND gp.resource_type = resource_type
+      AND gp.action = action
+    LIMIT 1;
+
+    RETURN COALESCE(allowed, FALSE);
+END;
+$$ LANGUAGE plpgsql;
+\i :abs_srcdir/../fs.sql
+--------------
+-- FILESYSTEM
+--------------
+-- filesystem
+CREATE TABLE IF NOT EXISTS files (
+    id SERIAL PRIMARY KEY,
+    name TEXT NOT NULL,
+    parent_id INTEGER REFERENCES files(id),  -- Directory structure
+    owner_user_id INTEGER REFERENCES users(id),
+    permissions TEXT NOT NULL,  -- e.g. 'rwxr-x---'
+    contents TEXT DEFAULT '',
+    is_directory BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMP DEFAULT now(),
+    group_id INTEGER REFERENCES groups(id)
+);
+-- File locks
+CREATE TABLE IF NOT EXISTS file_locks (
+    file_id INTEGER REFERENCES files(id),
+    locked_by_user INTEGER REFERENCES users(id),
+    lock_mode TEXT CHECK (lock_mode IN('read','write')),
+    PRIMARY KEY(file_id, locked_by_user)
+);
+-- File versions for versioning
+CREATE TABLE IF NOT EXISTS file_versions (
+    id SERIAL PRIMARY KEY,
+    file_id INTEGER REFERENCES files(id),
+    version_number INTEGER,
+    contents TEXT,
+    created_at TIMESTAMP DEFAULT now()
+);
+-- Create a file or directory
+CREATE OR REPLACE FUNCTION create_file(user_id INTEGER, filename TEXT, parent_id INTEGER, is_dir BOOLEAN DEFAULT FALSE) RETURNS INTEGER AS $$
+DECLARE
+    new_file_id INTEGER;
+BEGIN
+    IF NOT check_permission(user_id, 'file', 'write') THEN
+        RAISE EXCEPTION 'User % does not have permission to create files', user_id;
+    END IF;
+
+    INSERT INTO files (name, parent_id, owner_user_id, permissions, is_directory)
+    VALUES (filename, parent_id, user_id, 'rwxr-----', is_dir)
+    RETURNING id INTO new_file_id;
+
+    RETURN new_file_id;
+END;
+$$ LANGUAGE plpgsql;
+-- Write to a file
+CREATE OR REPLACE FUNCTION write_file(user_id INTEGER, file_id INTEGER, data TEXT) RETURNS VOID AS $$
+DECLARE
+    f RECORD;
+BEGIN
+    SELECT * INTO f FROM files WHERE id = file_id;
+    IF NOT FOUND THEN
+        RAISE EXCEPTION 'File not found';
+    END IF;
+
+    IF f.is_directory THEN
+        RAISE EXCEPTION 'Cannot write to a directory';
+    END IF;
+
+    -- Check if user is owner and has write permission or user has role that grants write
+    IF f.owner_user_id = user_id THEN
+        -- Owner permissions are in first three chars (e.g., 'rwx')
+        IF substring(f.permissions from 1 for 3) NOT LIKE '%w%' THEN
+            RAISE EXCEPTION 'Owner does not have write permission on this file';
+        END IF;
+    ELSIF NOT check_permission(user_id, 'file', 'write') THEN
+        RAISE EXCEPTION 'User % does not have permission to write files', user_id;
+    END IF;
+
+    UPDATE files SET contents = data WHERE id = file_id;
+END;
+$$ LANGUAGE plpgsql;
+-- Read from a file
+CREATE OR REPLACE FUNCTION read_file(user_id INTEGER, file_id INTEGER) RETURNS TEXT AS $$
+DECLARE
+    f RECORD;
+    result TEXT;
+BEGIN
+    SELECT * INTO f FROM files WHERE id = file_id;
+    IF NOT FOUND THEN
+        RAISE EXCEPTION 'File not found';
+    END IF;
+
+    IF f.is_directory THEN
+        RAISE EXCEPTION 'Cannot read from a directory, list directory instead';
+    END IF;
+
+    -- Check read permission for owner or user permission
+    IF f.owner_user_id = user_id THEN
+        IF substring(f.permissions from 1 for 3) NOT LIKE 'r%' THEN
+            RAISE EXCEPTION 'Owner does not have read permission on this file';
+        END IF;
+    ELSIF NOT check_permission(user_id, 'file', 'read') THEN
+        RAISE EXCEPTION 'User % does not have permission to read files', user_id;
+    END IF;
+
+    result := f.contents;
+    RETURN result;
+END;
+$$ LANGUAGE plpgsql;
+-- Change file permissions (owner only)
+CREATE OR REPLACE FUNCTION change_file_permissions(user_id INTEGER, file_id INTEGER, new_perms TEXT) RETURNS VOID AS $$
+DECLARE
+    f RECORD;
+BEGIN
+    SELECT * INTO f FROM files WHERE id = file_id;
+    IF NOT FOUND THEN
+        RAISE EXCEPTION 'File not found';
+    END IF;
+
+    IF f.owner_user_id != user_id THEN
+        RAISE EXCEPTION 'Only the owner can change file permissions';
+    END IF;
+
+    IF length(new_perms) != 9 THEN
+        RAISE EXCEPTION 'Permissions string must be 9 characters (e.g. rwxr-xr--)';
+    END IF;
+
+    UPDATE files SET permissions = new_perms WHERE id = file_id;
+END;
+$$ LANGUAGE plpgsql;
+-- Lock a file
+CREATE OR REPLACE FUNCTION lock_file(user_id INTEGER, file_id INTEGER, mode TEXT) RETURNS VOID AS $$
+DECLARE
+    f RECORD;
+BEGIN
+    SELECT * INTO f FROM files WHERE id=file_id;
+    IF NOT FOUND THEN
+        RAISE EXCEPTION 'File not found';
+    END IF;
+
+    INSERT INTO file_locks (file_id, locked_by_user, lock_mode)
+    VALUES (file_id, user_id, mode);
+END;
+$$ LANGUAGE plpgsql;
+-- Unlock a file
+CREATE OR REPLACE FUNCTION unlock_file(user_id INTEGER, file_id INTEGER) RETURNS VOID AS $$
+BEGIN
+    DELETE FROM file_locks
+        WHERE file_id = unlock_file.file_id
+          AND locked_by_user = user_id;
+END;
+$$ LANGUAGE plpgsql;
+-- Save a version of a file before write
+CREATE OR REPLACE FUNCTION version_file(file_id INTEGER) RETURNS VOID AS $$
+DECLARE
+    f RECORD;
+    max_version INTEGER;
+BEGIN
+    SELECT * INTO f FROM files WHERE id=file_id;
+    IF NOT FOUND THEN
+        RAISE EXCEPTION 'File not found';
+    END IF;
+
+    SELECT COALESCE(MAX(version_number),0) INTO max_version
+        FROM file_versions
+        WHERE file_versions.file_id = version_file.file_id;
+    INSERT INTO file_versions (file_id, version_number, contents)
+        VALUES (file_id, max_version+1, f.contents);
+END;
+$$ LANGUAGE plpgsql;
+\set VERBOSITY terse
+-- setup: create user and files
+INSERT INTO users (username)
+SELECT 'alice'
+WHERE NOT EXISTS (SELECT 1 FROM users WHERE username = 'alice');
+INSERT INTO files (id, name, owner_user_id, permissions, is_directory)
+VALUES (1, 'test.txt', 1, 'rwxr-----', false);
+INSERT INTO files (id, name, owner_user_id, permissions, is_directory)
+VALUES (2, 'test2.txt', 1, 'rwxr-----', false);
+-- successful lock
+SELECT lock_file(1, 1, 'read');
+ lock_file 
+-----------
+ 
+(1 row)
+
+\set ON_ERROR_STOP off
+-- duplicate lock should fail
+SELECT lock_file(1, 1, 'read');
+ERROR:  duplicate key value violates unique constraint "file_locks_pkey"
+-- non-existent file should fail
+SELECT lock_file(1, 999, 'read');
+ERROR:  File not found
+-- invalid mode should fail
+SELECT lock_file(1, 2, 'bad');
+ERROR:  new row for relation "file_locks" violates check constraint "file_locks_lock_mode_check"
+\set ON_ERROR_STOP on
