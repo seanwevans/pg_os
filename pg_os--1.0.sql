@@ -16,6 +16,7 @@ CREATE TABLE IF NOT EXISTS roles (
 );
 
 -- user roles
+-- Index on user_id for quick role lookups. Use CREATE INDEX CONCURRENTLY in production to avoid locking.
 CREATE TABLE IF NOT EXISTS user_roles (
     user_id INTEGER NOT NULL REFERENCES users(id),
     role_id INTEGER NOT NULL REFERENCES roles(id),
@@ -23,6 +24,7 @@ CREATE TABLE IF NOT EXISTS user_roles (
 );
 
 -- permissions
+-- Index on role_id for efficient permission checks. Use CREATE INDEX CONCURRENTLY in production.
 CREATE TABLE IF NOT EXISTS permissions (
     id SERIAL PRIMARY KEY,
     role_id INTEGER NOT NULL REFERENCES roles(id),
@@ -37,6 +39,7 @@ CREATE TABLE IF NOT EXISTS groups (
 );
 
 -- user groups
+-- Index on user_id for faster group membership queries. Use CREATE INDEX CONCURRENTLY in production environments.
 CREATE TABLE IF NOT EXISTS user_groups (
     user_id INTEGER REFERENCES users(id),
     group_id INTEGER REFERENCES groups(id),
@@ -44,6 +47,7 @@ CREATE TABLE IF NOT EXISTS user_groups (
 );
 
 -- group permissions
+-- Index on group_id for quick group permission checks. Use CREATE INDEX CONCURRENTLY in production.
 CREATE TABLE IF NOT EXISTS group_permissions (
     id SERIAL PRIMARY KEY,
     group_id INTEGER REFERENCES groups(id),
@@ -1320,10 +1324,13 @@ CREATE INDEX IF NOT EXISTS idx_signals_process ON signals(process_id);
 CREATE INDEX IF NOT EXISTS idx_signals_timestamp ON signals(timestamp);
 
 -- userrolespermissions
+-- Use CREATE INDEX CONCURRENTLY in production to minimize locking overhead.
 CREATE INDEX IF NOT EXISTS idx_users_username ON users(username);
 CREATE INDEX IF NOT EXISTS idx_user_roles_user ON user_roles(user_id);
 CREATE INDEX IF NOT EXISTS idx_user_roles_role ON user_roles(role_id);
 CREATE INDEX IF NOT EXISTS idx_permissions_role ON permissions(role_id);
+CREATE INDEX IF NOT EXISTS idx_user_groups_user ON user_groups(user_id);
+CREATE INDEX IF NOT EXISTS idx_group_permissions_group ON group_permissions(group_id);
 
 -- memory
 CREATE INDEX IF NOT EXISTS idx_memory_segments_allocated ON memory_segments(allocated);
