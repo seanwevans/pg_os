@@ -770,8 +770,8 @@ $$ LANGUAGE plpgsql;
 CREATE TABLE IF NOT EXISTS files (
     id SERIAL PRIMARY KEY,
     name TEXT NOT NULL,
-    parent_id INTEGER REFERENCES files(id),  -- Directory structure
-    owner_user_id INTEGER REFERENCES users(id),
+    parent_id INTEGER REFERENCES files(id) ON DELETE CASCADE,  -- Directory structure; cascade deletes
+    owner_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,  -- Owner; cascades on user delete
     permissions TEXT NOT NULL,  -- e.g. 'rwxr-x---'
     contents TEXT DEFAULT '',
     is_directory BOOLEAN DEFAULT FALSE,
