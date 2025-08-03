@@ -137,10 +137,41 @@ $$ LANGUAGE plpgsql;
 CREATE OR REPLACE FUNCTION lock_file(user_id INTEGER, file_id INTEGER, mode TEXT) RETURNS VOID AS $$
 DECLARE
     f RECORD;
+    existing file_locks%ROWTYPE;
 BEGIN
     SELECT * INTO f FROM files WHERE id=file_id;
     IF NOT FOUND THEN
         RAISE EXCEPTION 'File not found';
+    END IF;
+
+    -- Check if current user already holds a lock on the file
+    SELECT * INTO existing
+      FROM file_locks
+      WHERE file_id = lock_file.file_id
+        AND locked_by_user = user_id
+      FOR UPDATE;
+
+    IF FOUND THEN
+        -- User owns the lock; allow mode change if requested
+        IF existing.lock_mode <> mode THEN
+            UPDATE file_locks SET lock_mode = mode
+              WHERE file_id = file_id AND locked_by_user = user_id;
+        END IF;
+        RETURN;
+    END IF;
+
+    -- Look for locks held by other users and ensure compatibility
+    SELECT * INTO existing
+      FROM file_locks
+      WHERE file_id = lock_file.file_id
+        AND locked_by_user <> user_id
+      FOR UPDATE
+      LIMIT 1;
+
+    IF FOUND THEN
+        IF existing.lock_mode = 'write' OR mode = 'write' THEN
+            RAISE EXCEPTION 'File is already locked';
+        END IF;
     END IF;
 
     INSERT INTO file_locks (file_id, locked_by_user, lock_mode)
