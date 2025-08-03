@@ -156,17 +156,15 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- create a process
+-- create a process (caller manages transactions; errors handled via subtransaction)
 CREATE OR REPLACE PROCEDURE create_process(
-    process_name TEXT, 
-    owner_id INTEGER, 
+    process_name TEXT,
+    owner_id INTEGER,
     process_priority INTEGER DEFAULT 1
 )
 LANGUAGE plpgsql
 AS $$
 BEGIN
-    BEGIN TRANSACTION;
-    
     -- Permission check
     IF NOT check_permission(owner_id, 'process', 'execute') THEN
         RAISE EXCEPTION 'User % does not have permission to create a process', owner_id;
@@ -175,27 +173,20 @@ BEGIN
     -- Insert the process
     INSERT INTO processes (name, state, priority, owner_user_id, duration)
     VALUES (process_name, 'new', process_priority, owner_id, 1);
-
-    -- Commit transaction
-    COMMIT;
 EXCEPTION
     WHEN unique_violation THEN
-        ROLLBACK;
         RAISE EXCEPTION 'Process name % already exists', process_name;
     WHEN others THEN
-        ROLLBACK;
         RAISE EXCEPTION 'Could not create process: %', SQLERRM;
 END;
 $$;
 
 
--- start a process
+-- start a process (caller manages transactions; errors handled via subtransaction)
 CREATE OR REPLACE PROCEDURE start_process(process_id INTEGER)
 LANGUAGE plpgsql
 AS $$
 BEGIN
-    BEGIN TRANSACTION;
-
     -- Update the process state to 'ready' only if it's currently 'new'
     UPDATE processes
     SET state = 'ready', updated_at = now()
@@ -203,35 +194,26 @@ BEGIN
 
     -- Check if the update was successful
     IF NOT FOUND THEN
-        ROLLBACK; -- Rollback if the process was not in the expected state
         RAISE EXCEPTION 'Process % is not in a valid state to be started', process_id;
     END IF;
-
-    -- Commit the transaction if everything is successful
-    COMMIT;
 EXCEPTION
     WHEN others THEN
-        -- Rollback the transaction in case of any errors
-        ROLLBACK;
         RAISE EXCEPTION 'Failed to start process %: %', process_id, SQLERRM;
 END;
 $$;
 
 
--- execute a process
+-- execute a process (caller manages transactions; errors handled via subtransaction)
 CREATE OR REPLACE PROCEDURE execute_process(process_id INTEGER)
 LANGUAGE plpgsql
 AS $$
 BEGIN
-    BEGIN TRANSACTION;
-
     -- Check if the process is ready
     UPDATE processes
     SET state = 'running', updated_at = now()
     WHERE id = process_id AND state = 'ready';
 
     IF NOT FOUND THEN
-        ROLLBACK;
         RAISE NOTICE 'Process % is not ready for execution', process_id;
         RETURN;
     END IF;
@@ -249,12 +231,8 @@ BEGIN
 
     -- Log completion
     PERFORM log_process_action(process_id, 'Execution finished');
-
-    -- Commit transaction
-    COMMIT;
 EXCEPTION
     WHEN others THEN
-        ROLLBACK;
         RAISE EXCEPTION 'Failed to execute process %: %', process_id, SQLERRM;
 END;
 $$;
