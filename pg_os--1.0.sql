@@ -714,10 +714,15 @@ BEGIN
         END IF;
 
         -- Transaction block for atomic allocation
-        PERFORM pg_advisory_lock(1);  -- simulate locking, ensure no other transaction interferes
-        UPDATE memory_segments SET allocated = TRUE, allocated_to = process_id WHERE id = mem_seg.id;
-        INSERT INTO process_memory (process_id, segment_id) VALUES (process_id, mem_seg.id);
-        PERFORM pg_advisory_unlock(1);
+        BEGIN
+            PERFORM pg_advisory_lock(1);  -- simulate locking, ensure no other transaction interferes
+            UPDATE memory_segments SET allocated = TRUE, allocated_to = process_id WHERE id = mem_seg.id;
+            INSERT INTO process_memory (process_id, segment_id) VALUES (process_id, mem_seg.id);
+            PERFORM pg_advisory_unlock(1);
+        EXCEPTION WHEN others THEN
+            PERFORM pg_advisory_unlock(1);
+            RAISE;
+        END;
 
         -- Log the allocation
         PERFORM log_memory_action(process_id, 'Memory allocated: segment ' || mem_seg.id, user_id, mem_seg.id);
