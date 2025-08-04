@@ -5,7 +5,7 @@
 -- processes
 CREATE TABLE processes (
     id SERIAL PRIMARY KEY,
-    name TEXT NOT NULL,
+    name TEXT NOT NULL UNIQUE,
     state TEXT NOT NULL CHECK (state IN ('new', 'ready', 'running', 'waiting', 'terminated')),
     priority INTEGER DEFAULT 1, -- Higher numbers = higher priority
     created_at TIMESTAMP DEFAULT now(),
