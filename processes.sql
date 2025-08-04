@@ -92,15 +92,12 @@ CREATE OR REPLACE PROCEDURE execute_process(process_id INTEGER)
 LANGUAGE plpgsql
 AS $$
 BEGIN
-    BEGIN TRANSACTION;
-
     -- Check if the process is ready
     UPDATE processes
     SET state = 'running', updated_at = now()
     WHERE id = process_id AND state = 'ready';
 
     IF NOT FOUND THEN
-        ROLLBACK;
         RAISE NOTICE 'Process % is not ready for execution', process_id;
         RETURN;
     END IF;
@@ -118,66 +115,13 @@ BEGIN
 
     -- Log completion
     PERFORM log_process_action(process_id, 'Execution finished');
-
-    -- Commit transaction
-    COMMIT;
 EXCEPTION
     WHEN others THEN
-        ROLLBACK;
         RAISE EXCEPTION 'Failed to execute process %: %', process_id, SQLERRM;
 END;
 $$;
 
 
-
--- schedule process
-CREATE OR REPLACE PROCEDURE schedule_processes()
-LANGUAGE plpgsql
-AS $$
-DECLARE
-    cfg RECORD;
-    next_process RECORD;
-BEGIN
-    -- Load scheduler configuration
-    SELECT * INTO cfg FROM scheduler_config ORDER BY id DESC LIMIT 1;
-    IF NOT FOUND THEN
-        RAISE NOTICE 'No scheduler configuration found. Using priority as default.';
-        cfg.policy := 'priority';
-    END IF;
-
-    LOOP
-        -- Fetch next process based on policy
-        IF cfg.policy = 'priority' THEN
-            SELECT * INTO next_process
-            FROM processes
-            WHERE state = 'ready'
-            ORDER BY priority DESC, created_at
-            LIMIT 1;
-        ELSIF cfg.policy = 'round_robin' THEN
-            SELECT * INTO next_process
-            FROM processes
-            WHERE state = 'ready'
-            ORDER BY updated_at
-            LIMIT 1;
-        ELSIF cfg.policy = 'sjf' THEN
-            SELECT * INTO next_process
-            FROM processes
-            WHERE state = 'ready'
-            ORDER BY duration, created_at
-            LIMIT 1;
-        END IF;
-
-        IF NOT FOUND THEN
-            EXIT;
-        END IF;
-
-        -- Execute the selected process in a transaction
-        BEGIN TRANSACTION;
-        PERFORM execute_process(next_process.id);
-        COMMIT;
-    END LOOP;
-END;
-$$;
 
 
 

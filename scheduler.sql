@@ -77,7 +77,7 @@ BEGIN
         END IF;
 
         -- Execute the chosen process
-        PERFORM execute_process(next_process.id);
+        CALL execute_process(next_process.id);
 
     END LOOP;
 END;

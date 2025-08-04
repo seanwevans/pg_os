@@ -239,56 +239,6 @@ $$;
 
 
 
--- schedule process
-CREATE OR REPLACE PROCEDURE schedule_processes()
-LANGUAGE plpgsql
-AS $$
-DECLARE
-    cfg RECORD;
-    next_process RECORD;
-BEGIN
-    -- Load scheduler configuration
-    SELECT * INTO cfg FROM scheduler_config ORDER BY id DESC LIMIT 1;
-    IF NOT FOUND THEN
-        RAISE NOTICE 'No scheduler configuration found. Using priority as default.';
-        cfg.policy := 'priority';
-    END IF;
-
-    LOOP
-        -- Fetch next process based on policy
-        IF cfg.policy = 'priority' THEN
-            SELECT * INTO next_process
-            FROM processes
-            WHERE state = 'ready'
-            ORDER BY priority DESC, created_at
-            LIMIT 1;
-        ELSIF cfg.policy = 'round_robin' THEN
-            SELECT * INTO next_process
-            FROM processes
-            WHERE state = 'ready'
-            ORDER BY updated_at
-            LIMIT 1;
-        ELSIF cfg.policy = 'sjf' THEN
-            SELECT * INTO next_process
-            FROM processes
-            WHERE state = 'ready'
-            ORDER BY duration, created_at
-            LIMIT 1;
-        END IF;
-
-        IF NOT FOUND THEN
-            EXIT;
-        END IF;
-
-        -- Execute the selected process in a transaction
-        BEGIN TRANSACTION;
-        PERFORM execute_process(next_process.id);
-        COMMIT;
-    END LOOP;
-END;
-$$;
-
-
 
 -- list all processes by state
 CREATE OR REPLACE FUNCTION list_processes_by_state(state_filter TEXT) 
@@ -431,7 +381,7 @@ BEGIN
         END IF;
 
         -- Execute the chosen process
-        PERFORM execute_process(next_process.id);
+        CALL execute_process(next_process.id);
 
     END LOOP;
 END;
