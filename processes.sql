@@ -17,7 +17,7 @@ CREATE TABLE processes (
 -- process logs
 CREATE TABLE IF NOT EXISTS process_logs (
     id SERIAL PRIMARY KEY,
-    process_id INTEGER REFERENCES processes(id),
+    process_id INTEGER REFERENCES processes(id) ON DELETE CASCADE,
     action TEXT NOT NULL,
     timestamp TIMESTAMP DEFAULT now()
 );
