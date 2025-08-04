@@ -144,7 +144,7 @@ CREATE TABLE processes (
 -- process logs
 CREATE TABLE IF NOT EXISTS process_logs (
     id SERIAL PRIMARY KEY,
-    process_id INTEGER REFERENCES processes(id),
+    process_id INTEGER REFERENCES processes(id) ON DELETE CASCADE,
     action TEXT NOT NULL,
     timestamp TIMESTAMP DEFAULT now()
 );
@@ -368,7 +368,7 @@ CREATE TABLE IF NOT EXISTS scheduler_config (
 -- threads
 CREATE TABLE IF NOT EXISTS threads (
     id SERIAL PRIMARY KEY,
-    process_id INTEGER NOT NULL REFERENCES processes(id),
+    process_id INTEGER NOT NULL REFERENCES processes(id) ON DELETE CASCADE,
     name TEXT NOT NULL,
     state TEXT CHECK (state IN ('new', 'ready', 'running', 'waiting', 'terminated')) DEFAULT 'new',
     priority INTEGER DEFAULT 1,
