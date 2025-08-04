@@ -911,7 +911,7 @@ BEGIN
     -- Check if current user already holds a lock on the file
     SELECT * INTO existing
       FROM file_locks
-      WHERE file_id = lock_file.file_id
+      WHERE file_locks.file_id = lock_file.file_id
         AND locked_by_user = user_id
       FOR UPDATE;
 
@@ -919,7 +919,8 @@ BEGIN
         -- User owns the lock; allow mode change if requested
         IF existing.lock_mode <> mode THEN
             UPDATE file_locks SET lock_mode = mode
-              WHERE file_id = file_id AND locked_by_user = user_id;
+              WHERE file_locks.file_id = lock_file.file_id
+                AND locked_by_user = user_id;
         END IF;
         RETURN;
     END IF;
@@ -927,7 +928,7 @@ BEGIN
     -- Look for locks held by other users and ensure compatibility
     SELECT * INTO existing
       FROM file_locks
-      WHERE file_id = lock_file.file_id
+      WHERE file_locks.file_id = lock_file.file_id
         AND locked_by_user <> user_id
       FOR UPDATE
       LIMIT 1;
@@ -939,7 +940,7 @@ BEGIN
     END IF;
 
     INSERT INTO file_locks (file_id, locked_by_user, lock_mode)
-    VALUES (file_id, user_id, mode);
+    VALUES (lock_file.file_id, user_id, mode);
 END;
 $$ LANGUAGE plpgsql;
 
