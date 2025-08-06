@@ -11,7 +11,8 @@ CREATE TABLE processes (
     created_at TIMESTAMP DEFAULT now(),
     updated_at TIMESTAMP DEFAULT now(),
     owner_user_id INTEGER REFERENCES users(id),
-    duration INTEGER DEFAULT 1
+    duration INTEGER DEFAULT 1,
+    waiting_on_semaphore TEXT
 );
 
 -- process logs
