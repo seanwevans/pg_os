@@ -138,7 +138,8 @@ CREATE TABLE processes (
     created_at TIMESTAMP DEFAULT now(),
     updated_at TIMESTAMP DEFAULT now(),
     owner_user_id INTEGER REFERENCES users(id),
-    duration INTEGER DEFAULT 1
+    duration INTEGER DEFAULT 1,
+    waiting_on_semaphore TEXT
 );
 
 -- process logs
@@ -322,6 +323,7 @@ CREATE TABLE IF NOT EXISTS threads (
     name TEXT NOT NULL,
     state TEXT CHECK (state IN ('new', 'ready', 'running', 'waiting', 'terminated')) DEFAULT 'new',
     priority INTEGER DEFAULT 1,
+    waiting_on_mutex TEXT,
     created_at TIMESTAMP DEFAULT now(),
     updated_at TIMESTAMP DEFAULT now()
 );
@@ -451,9 +453,10 @@ BEGIN
 
     IF m.locked_by_thread IS NULL THEN
         UPDATE mutexes SET locked_by_thread = thread_id WHERE id = m.id;
+        UPDATE threads SET waiting_on_mutex = NULL WHERE id = thread_id;
     ELSE
         -- Thread must wait
-        UPDATE threads SET state = 'waiting', updated_at = now() WHERE id = thread_id;
+        UPDATE threads SET state = 'waiting', waiting_on_mutex = mutex_name, updated_at = now() WHERE id = thread_id;
     END IF;
 END;
 $$ LANGUAGE plpgsql;
@@ -472,10 +475,10 @@ BEGIN
 
     IF m.locked_by_thread = thread_id THEN
         UPDATE mutexes SET locked_by_thread = NULL WHERE id = m.id;
-        -- Wake up a waiting thread if any
-        SELECT * INTO w FROM threads WHERE state='waiting' ORDER BY updated_at LIMIT 1;
+        -- Wake up a waiting thread if any for this mutex
+        SELECT * INTO w FROM threads WHERE state='waiting' AND waiting_on_mutex = mutex_name ORDER BY updated_at LIMIT 1;
         IF FOUND THEN
-            UPDATE threads SET state='ready', updated_at=now() WHERE id=w.id;
+            UPDATE threads SET state='ready', waiting_on_mutex = NULL, updated_at=now() WHERE id=w.id;
         END IF;
     END IF;
 END;
@@ -505,10 +508,11 @@ BEGIN
     IF sem.count > 0 THEN
         -- Acquire the semaphore immediately
         UPDATE semaphores SET count = count - 1 WHERE name = sem_name;
+        UPDATE processes SET waiting_on_semaphore = NULL WHERE id = process_id;
         PERFORM log_process_action(process_id, 'Semaphore acquired: ' || sem_name);
     ELSE
         -- No available resource, process must wait
-        UPDATE processes SET state = 'waiting', updated_at = now() WHERE id = process_id;
+        UPDATE processes SET state = 'waiting', waiting_on_semaphore = sem_name, updated_at = now() WHERE id = process_id;
         PERFORM log_process_action(process_id, 'Waiting for semaphore: ' || sem_name);
     END IF;
 END;
@@ -534,12 +538,12 @@ BEGIN
         -- If any process is waiting for this semaphore, ready the oldest waiting process
         SELECT * INTO waiting_proc
         FROM processes
-        WHERE state = 'waiting'
+        WHERE state = 'waiting' AND waiting_on_semaphore = sem_name
         ORDER BY updated_at
         LIMIT 1;
 
         IF FOUND THEN
-            UPDATE processes SET state = 'ready', updated_at = now() WHERE id = waiting_proc.id;
+            UPDATE processes SET state = 'ready', waiting_on_semaphore = NULL, updated_at = now() WHERE id = waiting_proc.id;
             PERFORM log_process_action(waiting_proc.id, 'Process moved to ready due to semaphore release: ' || sem_name);
         END IF;
     END IF;
@@ -1272,6 +1276,7 @@ CREATE INDEX IF NOT EXISTS idx_processes_state ON processes(state);
 CREATE INDEX IF NOT EXISTS idx_processes_priority ON processes(priority);
 CREATE INDEX IF NOT EXISTS idx_processes_owner ON processes(owner_user_id);
 CREATE INDEX IF NOT EXISTS idx_processes_updated_at ON processes(updated_at);
+CREATE INDEX IF NOT EXISTS idx_processes_waiting_on_semaphore ON processes(waiting_on_semaphore);
 CREATE INDEX IF NOT EXISTS idx_process_logs_process ON process_logs(process_id);
 CREATE INDEX IF NOT EXISTS idx_process_logs_timestamp ON process_logs(timestamp);
 
@@ -1279,6 +1284,7 @@ CREATE INDEX IF NOT EXISTS idx_process_logs_timestamp ON process_logs(timestamp)
 CREATE INDEX IF NOT EXISTS idx_threads_state ON threads(state);
 CREATE INDEX IF NOT EXISTS idx_threads_priority ON threads(priority);
 CREATE INDEX IF NOT EXISTS idx_threads_process_id ON threads(process_id);
+CREATE INDEX IF NOT EXISTS idx_threads_waiting_on_mutex ON threads(waiting_on_mutex);
 
 -- locks
 CREATE INDEX IF NOT EXISTS idx_mutexes_name ON mutexes(name);

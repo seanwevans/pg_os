@@ -40,9 +40,10 @@ BEGIN
 
     IF m.locked_by_thread IS NULL THEN
         UPDATE mutexes SET locked_by_thread = thread_id WHERE id = m.id;
+        UPDATE threads SET waiting_on_mutex = NULL WHERE id = thread_id;
     ELSE
         -- Thread must wait
-        UPDATE threads SET state = 'waiting', updated_at = now() WHERE id = thread_id;
+        UPDATE threads SET state = 'waiting', waiting_on_mutex = mutex_name, updated_at = now() WHERE id = thread_id;
     END IF;
 END;
 $$ LANGUAGE plpgsql;
@@ -61,10 +62,10 @@ BEGIN
 
     IF m.locked_by_thread = thread_id THEN
         UPDATE mutexes SET locked_by_thread = NULL WHERE id = m.id;
-        -- Wake up a waiting thread if any
-        SELECT * INTO w FROM threads WHERE state='waiting' ORDER BY updated_at LIMIT 1;
+        -- Wake up a waiting thread if any for this mutex
+        SELECT * INTO w FROM threads WHERE state='waiting' AND waiting_on_mutex = mutex_name ORDER BY updated_at LIMIT 1;
         IF FOUND THEN
-            UPDATE threads SET state='ready', updated_at=now() WHERE id=w.id;
+            UPDATE threads SET state='ready', waiting_on_mutex = NULL, updated_at=now() WHERE id=w.id;
         END IF;
     END IF;
 END;
@@ -94,10 +95,11 @@ BEGIN
     IF sem.count > 0 THEN
         -- Acquire the semaphore immediately
         UPDATE semaphores SET count = count - 1 WHERE name = sem_name;
+        UPDATE processes SET waiting_on_semaphore = NULL WHERE id = process_id;
         PERFORM log_process_action(process_id, 'Semaphore acquired: ' || sem_name);
     ELSE
         -- No available resource, process must wait
-        UPDATE processes SET state = 'waiting', updated_at = now() WHERE id = process_id;
+        UPDATE processes SET state = 'waiting', waiting_on_semaphore = sem_name, updated_at = now() WHERE id = process_id;
         PERFORM log_process_action(process_id, 'Waiting for semaphore: ' || sem_name);
     END IF;
 END;
@@ -123,12 +125,12 @@ BEGIN
         -- If any process is waiting for this semaphore, ready the oldest waiting process
         SELECT * INTO waiting_proc
         FROM processes
-        WHERE state = 'waiting'
+        WHERE state = 'waiting' AND waiting_on_semaphore = sem_name
         ORDER BY updated_at
         LIMIT 1;
 
         IF FOUND THEN
-            UPDATE processes SET state = 'ready', updated_at = now() WHERE id = waiting_proc.id;
+            UPDATE processes SET state = 'ready', waiting_on_semaphore = NULL, updated_at = now() WHERE id = waiting_proc.id;
             PERFORM log_process_action(waiting_proc.id, 'Process moved to ready due to semaphore release: ' || sem_name);
         END IF;
     END IF;

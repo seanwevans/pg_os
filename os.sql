@@ -18,6 +18,7 @@ CREATE INDEX IF NOT EXISTS idx_processes_state ON processes(state);
 CREATE INDEX IF NOT EXISTS idx_processes_priority ON processes(priority);
 CREATE INDEX IF NOT EXISTS idx_processes_owner ON processes(owner_user_id);
 CREATE INDEX IF NOT EXISTS idx_processes_updated_at ON processes(updated_at);
+CREATE INDEX IF NOT EXISTS idx_processes_waiting_on_semaphore ON processes(waiting_on_semaphore);
 CREATE INDEX IF NOT EXISTS idx_process_logs_process ON process_logs(process_id);
 CREATE INDEX IF NOT EXISTS idx_process_logs_timestamp ON process_logs(timestamp);
 
@@ -25,6 +26,7 @@ CREATE INDEX IF NOT EXISTS idx_process_logs_timestamp ON process_logs(timestamp)
 CREATE INDEX IF NOT EXISTS idx_threads_state ON threads(state);
 CREATE INDEX IF NOT EXISTS idx_threads_priority ON threads(priority);
 CREATE INDEX IF NOT EXISTS idx_threads_process_id ON threads(process_id);
+CREATE INDEX IF NOT EXISTS idx_threads_waiting_on_mutex ON threads(waiting_on_mutex);
 
 -- locks
 CREATE INDEX IF NOT EXISTS idx_mutexes_name ON mutexes(name);

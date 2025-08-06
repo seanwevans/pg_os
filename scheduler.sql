@@ -18,6 +18,7 @@ CREATE TABLE IF NOT EXISTS threads (
     name TEXT NOT NULL,
     state TEXT CHECK (state IN ('new', 'ready', 'running', 'waiting', 'terminated')) DEFAULT 'new',
     priority INTEGER DEFAULT 1,
+    waiting_on_mutex TEXT,
     created_at TIMESTAMP DEFAULT now(),
     updated_at TIMESTAMP DEFAULT now()
 );
