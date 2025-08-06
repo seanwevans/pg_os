@@ -90,7 +90,7 @@ BEGIN
     UPDATE memory_segments
         SET allocated = FALSE, allocated_to = NULL
         WHERE id = free_memory.segment_id;
-    PERFORM log_process_action(process_id, 'Memory freed: segment ' || segment_id);
+    PERFORM log_memory_action(process_id, 'Memory freed: segment ' || segment_id, user_id, segment_id);
 END;
 $$ LANGUAGE plpgsql;
 
