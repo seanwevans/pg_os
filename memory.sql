@@ -106,7 +106,15 @@ BEGIN
         RAISE EXCEPTION 'No free pages available';
     END IF;
 
-    virtual_addr := floor(random()*1000000)::BIGINT;
+    -- Generate a unique virtual address for this thread
+    LOOP
+        virtual_addr := floor(random()*1000000)::BIGINT;
+        PERFORM 1 FROM page_tables
+            WHERE thread_id = allocate_page.thread_id
+              AND virtual_address = virtual_addr;
+        EXIT WHEN NOT FOUND;
+    END LOOP;
+
     UPDATE pages SET allocated=TRUE, allocated_to_thread=thread_id WHERE id=p.id;
     INSERT INTO page_tables (thread_id, page_id, virtual_address)
         VALUES (allocate_page.thread_id, p.id, virtual_addr);
