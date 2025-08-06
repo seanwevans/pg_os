@@ -45,18 +45,27 @@ BEGIN
     END IF;
 
     BEGIN
-        SELECT * INTO mem_seg FROM memory_segments
-        WHERE allocated = FALSE AND size >= segment_size
-        ORDER BY size
-        LIMIT 1;
-
-        IF NOT FOUND THEN
-            RAISE EXCEPTION 'No suitable memory segment available of size %', segment_size;
-        END IF;
-
         -- Transaction block for atomic allocation
         BEGIN
             PERFORM pg_advisory_lock(1);  -- simulate locking, ensure no other transaction interferes
+
+            SELECT * INTO mem_seg FROM memory_segments
+            WHERE allocated = FALSE AND size >= segment_size
+            ORDER BY size
+            LIMIT 1
+            FOR UPDATE;
+
+            IF NOT FOUND THEN
+                PERFORM pg_advisory_unlock(1);
+                RAISE EXCEPTION 'No suitable memory segment available of size %', segment_size;
+            END IF;
+
+            -- Recheck to ensure the segment is still free within the lock
+            IF mem_seg.allocated THEN
+                PERFORM pg_advisory_unlock(1);
+                RAISE EXCEPTION 'Memory segment % is already allocated', mem_seg.id;
+            END IF;
+
             UPDATE memory_segments SET allocated = TRUE, allocated_to = process_id WHERE id = mem_seg.id;
             INSERT INTO process_memory (process_id, segment_id)
                 VALUES (allocate_memory.process_id, mem_seg.id);
