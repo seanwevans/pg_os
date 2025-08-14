@@ -1,0 +1,33 @@
+-- tests for load_module and unload_module
+\set ECHO none
+INSERT INTO modules (module_name) VALUES ('test_module');
+SELECT module_name, loaded FROM modules WHERE module_name = 'test_module';
+ module_name | loaded 
+-------------+--------
+ test_module | f
+(1 row)
+
+SELECT load_module('test_module');
+ load_module 
+-------------
+ 
+(1 row)
+
+SELECT module_name, loaded FROM modules WHERE module_name = 'test_module';
+ module_name | loaded 
+-------------+--------
+ test_module | t
+(1 row)
+
+SELECT unload_module('test_module');
+ unload_module 
+---------------
+ 
+(1 row)
+
+SELECT module_name, loaded FROM modules WHERE module_name = 'test_module';
+ module_name | loaded 
+-------------+--------
+ test_module | f
+(1 row)
+

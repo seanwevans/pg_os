@@ -1,0 +1,61 @@
+-- tests for load_module and unload_module
+\set ECHO none
+SELECT module_name, loaded FROM modules ORDER BY id;
+ module_name | loaded 
+-------------+--------
+ mod1        | f
+ mod2        | f
+(2 rows)
+
+SELECT load_module('mod1');
+ load_module 
+-------------
+ 
+(1 row)
+
+SELECT module_name, loaded FROM modules ORDER BY id;
+ module_name | loaded 
+-------------+--------
+ mod1        | t
+ mod2        | f
+(2 rows)
+
+SELECT unload_module('mod1');
+ unload_module 
+---------------
+ 
+(1 row)
+
+SELECT module_name, loaded FROM modules ORDER BY id;
+ module_name | loaded 
+-------------+--------
+ mod1        | f
+ mod2        | f
+(2 rows)
+
+SELECT load_module('mod3');
+ load_module 
+-------------
+ 
+(1 row)
+
+SELECT module_name, loaded FROM modules ORDER BY id;
+ module_name | loaded 
+-------------+--------
+ mod1        | f
+ mod2        | f
+(2 rows)
+
+SELECT load_module('mod2');
+ load_module 
+-------------
+ 
+(1 row)
+
+SELECT module_name, loaded FROM modules ORDER BY id;
+ module_name | loaded 
+-------------+--------
+ mod1        | f
+ mod2        | t
+(2 rows)
+
