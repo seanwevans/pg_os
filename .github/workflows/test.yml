@@ -1,19 +1,20 @@
-name: CI
-on:
-  push:
-  pull_request:
 jobs:
   test:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Install PostgreSQL
+
+      - name: Install PostgreSQL and headers
         run: |
           sudo apt-get update
-          sudo apt-get install -y postgresql postgresql-contrib postgresql-server-dev-all
+          # Install the server, contrib modules and the development headers
+          sudo apt-get install -y postgresql postgresql-contrib libpq-dev
+
       - name: Start PostgreSQL
         run: |
+          # Determine the installed major version and start the cluster
           sudo pg_ctlcluster $(pg_config --version | awk '{print $2}' | cut -d. -f1) main start
+
       - name: Run tests
         run: |
           make install
