@@ -76,6 +76,7 @@ BEGIN
         RAISE EXCEPTION 'User % does not have permission to write files', user_id;
     END IF;
 
+    PERFORM version_file(file_id);
     UPDATE files SET contents = data WHERE id = file_id;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, pg_temp;
