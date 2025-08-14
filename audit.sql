@@ -44,7 +44,8 @@ CREATE OR REPLACE FUNCTION log_file_action(file_id INTEGER, action TEXT, user_id
 BEGIN
     INSERT INTO file_logs (file_id, action, performed_by) VALUES (file_id, action, user_id);
 END;
-$$ LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, pg_temp;
+ALTER FUNCTION log_file_action(INTEGER, TEXT, INTEGER) OWNER TO pg_os_admin;
 
 
 -- log for memory
@@ -52,7 +53,8 @@ CREATE OR REPLACE FUNCTION log_memory_action(process_id INTEGER, action TEXT, us
 BEGIN
     INSERT INTO memory_logs (process_id, action, performed_by, segment_id) VALUES (process_id, action, user_id, segment_id);
 END;
-$$ LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, pg_temp;
+ALTER FUNCTION log_memory_action(INTEGER, TEXT, INTEGER, INTEGER) OWNER TO pg_os_admin;
 
 
 
@@ -87,7 +89,8 @@ BEGIN
         RAISE EXCEPTION 'Error writing to file: %', SQLERRM;
     END;
 END;
-$$ LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, pg_temp;
+ALTER FUNCTION write_file(INTEGER, INTEGER, TEXT) OWNER TO pg_os_admin;
 
 
 -- On fault, record the fault and possibly rollback to a checkpoint
@@ -96,4 +99,5 @@ BEGIN
     INSERT INTO faults (process_id, fault_type) VALUES (process_id, fault_type);
     -- Recovery logic would go here, like restoring from a checkpoint
 END;
-$$ LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, pg_temp;
+ALTER FUNCTION handle_fault(INTEGER, TEXT) OWNER TO pg_os_admin;

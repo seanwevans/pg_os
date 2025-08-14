@@ -33,4 +33,5 @@ BEGIN
     -- Just simulate logging the send
     RAISE NOTICE 'Sending packet from socket % to %: %', socket_id, s.connected_to, data;
 END;
-$$ LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, pg_temp;
+ALTER FUNCTION send_packet(INTEGER, TEXT) OWNER TO pg_os_admin;
