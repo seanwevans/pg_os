@@ -1281,7 +1281,9 @@ CREATE TABLE IF NOT EXISTS modules (
 
 CREATE OR REPLACE FUNCTION load_module(module_name TEXT) RETURNS VOID AS $$
 BEGIN
-    UPDATE modules SET loaded=TRUE WHERE module_name=module_name;
+    UPDATE modules
+    SET loaded = TRUE
+    WHERE modules.module_name = load_module.module_name;
     -- In practice, you'd dynamically execute code or extend functionality
 END;
 $$ LANGUAGE plpgsql;
