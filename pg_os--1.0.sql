@@ -1151,9 +1151,18 @@ CREATE OR REPLACE FUNCTION free_all_memory_for_process(process_id INTEGER) RETUR
 DECLARE
     seg_id INTEGER;
 BEGIN
-    FOR seg_id IN SELECT segment_id FROM process_memory WHERE process_id = process_id LOOP
-        UPDATE memory_segments SET allocated = FALSE, allocated_to = NULL WHERE id = seg_id;
-        DELETE FROM process_memory WHERE process_id = process_id AND segment_id = seg_id;
+    FOR seg_id IN
+        SELECT segment_id
+          FROM process_memory
+         WHERE process_memory.process_id = free_all_memory_for_process.process_id
+    LOOP
+        UPDATE memory_segments
+           SET allocated = FALSE,
+               allocated_to = NULL
+         WHERE id = seg_id;
+        DELETE FROM process_memory
+         WHERE process_memory.process_id = free_all_memory_for_process.process_id
+           AND segment_id = seg_id;
     END LOOP;
 END;
 $$ LANGUAGE plpgsql;
