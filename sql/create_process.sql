@@ -1,7 +1,7 @@
 -- tests for create_process
+\set ECHO none
 SET client_min_messages TO warning;
 \i :abs_srcdir/../usersrolespermissions.sql
-\set VERBOSITY terse
 
 -- processes table and simplified create_process procedure
 CREATE TABLE processes (
@@ -30,6 +30,8 @@ EXCEPTION
         RAISE EXCEPTION 'Process name % already exists', process_name;
 END;
 $$;
+\set ECHO queries
+\set VERBOSITY terse
 
 -- setup: create user
 SELECT create_user('carol') AS user_id;

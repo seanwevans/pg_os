@@ -48,8 +48,7 @@ BEGIN
 
     RETURN new_file_id;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, pg_temp;
-ALTER FUNCTION create_file(INTEGER, TEXT, INTEGER, BOOLEAN) OWNER TO pg_os_admin;
+$$ LANGUAGE plpgsql;
 
 
 -- Write to a file
@@ -79,8 +78,7 @@ BEGIN
     PERFORM version_file(file_id);
     UPDATE files SET contents = data WHERE id = file_id;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, pg_temp;
-ALTER FUNCTION write_file(INTEGER, INTEGER, TEXT) OWNER TO pg_os_admin;
+$$ LANGUAGE plpgsql;
 
 
 -- Read from a file
@@ -110,8 +108,7 @@ BEGIN
     result := f.contents;
     RETURN result;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, pg_temp;
-ALTER FUNCTION read_file(INTEGER, INTEGER) OWNER TO pg_os_admin;
+$$ LANGUAGE plpgsql;
 
 
 -- Change file permissions (owner only)
@@ -134,8 +131,7 @@ BEGIN
 
     UPDATE files SET permissions = new_perms WHERE id = file_id;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, pg_temp;
-ALTER FUNCTION change_file_permissions(INTEGER, INTEGER, TEXT) OWNER TO pg_os_admin;
+$$ LANGUAGE plpgsql;
 
 
 -- Lock a file
@@ -194,8 +190,7 @@ BEGIN
     INSERT INTO file_locks (file_id, locked_by_user, lock_mode)
     VALUES (lock_file.file_id, user_id, mode);
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, pg_temp;
-ALTER FUNCTION lock_file(INTEGER, INTEGER, TEXT) OWNER TO pg_os_admin;
+$$ LANGUAGE plpgsql;
 
 
 -- Unlock a file
@@ -205,8 +200,7 @@ BEGIN
         WHERE file_id = unlock_file.file_id
           AND locked_by_user = user_id;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, pg_temp;
-ALTER FUNCTION unlock_file(INTEGER, INTEGER) OWNER TO pg_os_admin;
+$$ LANGUAGE plpgsql;
 
 
 -- Save a version of a file before write
@@ -226,5 +220,4 @@ BEGIN
     INSERT INTO file_versions (file_id, version_number, contents)
         VALUES (file_id, max_version+1, f.contents);
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, pg_temp;
-ALTER FUNCTION version_file(INTEGER) OWNER TO pg_os_admin;
+$$ LANGUAGE plpgsql;
