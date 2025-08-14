@@ -1,0 +1,22 @@
+-- test for free_all_memory_for_process
+\set ECHO none
+SELECT free_all_memory_for_process(1);
+ free_all_memory_for_process 
+-----------------------------
+ 
+(1 row)
+
+SELECT id, allocated, allocated_to FROM memory_segments ORDER BY id;
+ id | allocated | allocated_to 
+----+-----------+--------------
+  1 | f         |             
+  2 | f         |             
+  3 | t         |            2
+(3 rows)
+
+SELECT process_id, segment_id FROM process_memory ORDER BY process_id, segment_id;
+ process_id | segment_id 
+------------+------------
+          2 |          3
+(1 row)
+
