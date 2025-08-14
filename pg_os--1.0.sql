@@ -183,11 +183,15 @@ END;
 $$;
 
 
--- start a process (caller manages transactions; errors handled via subtransaction)
-CREATE OR REPLACE PROCEDURE start_process(process_id INTEGER)
+CREATE OR REPLACE PROCEDURE start_process(user_id INTEGER, process_id INTEGER)
 LANGUAGE plpgsql
 AS $$
 BEGIN
+    -- Permission check
+    IF NOT check_permission(user_id, 'process', 'execute') THEN
+        RAISE EXCEPTION 'User % does not have permission to start processes', user_id;
+    END IF;
+
     -- Update the process state to 'ready' only if it's currently 'new'
     UPDATE processes
     SET state = 'ready', updated_at = now()
@@ -204,11 +208,15 @@ END;
 $$;
 
 
--- execute a process (caller manages transactions; errors handled via subtransaction)
-CREATE OR REPLACE PROCEDURE execute_process(process_id INTEGER)
+CREATE OR REPLACE PROCEDURE execute_process(user_id INTEGER, process_id INTEGER)
 LANGUAGE plpgsql
 AS $$
 BEGIN
+    -- Permission check
+    IF NOT check_permission(user_id, 'process', 'execute') THEN
+        RAISE EXCEPTION 'User % does not have permission to execute processes', user_id;
+    END IF;
+
     -- Check if the process is ready
     UPDATE processes
     SET state = 'running', updated_at = now()
@@ -259,18 +267,26 @@ END;
 $$ LANGUAGE plpgsql;
 
 
--- set process priority
-CREATE OR REPLACE FUNCTION set_process_priority(process_id INTEGER, new_priority INTEGER) RETURNS VOID AS $$
+CREATE OR REPLACE FUNCTION set_process_priority(user_id INTEGER, process_id INTEGER, new_priority INTEGER) RETURNS VOID AS $$
 BEGIN
+    -- Permission check
+    IF NOT check_permission(user_id, 'process', 'execute') THEN
+        RAISE EXCEPTION 'User % does not have permission to set process priority', user_id;
+    END IF;
+
     UPDATE processes SET priority = new_priority, updated_at = now()
     WHERE id = process_id;
 END;
 $$ LANGUAGE plpgsql;
 
 
--- terminate process
-CREATE OR REPLACE FUNCTION terminate_process(process_id INTEGER) RETURNS VOID AS $$
+CREATE OR REPLACE FUNCTION terminate_process(user_id INTEGER, process_id INTEGER) RETURNS VOID AS $$
 BEGIN
+    -- Permission check
+    IF NOT check_permission(user_id, 'process', 'execute') THEN
+        RAISE EXCEPTION 'User % does not have permission to terminate processes', user_id;
+    END IF;
+
     UPDATE processes
     SET state = 'terminated', updated_at = now()
     WHERE id = process_id AND state != 'terminated';
@@ -287,18 +303,26 @@ END;
 $$ LANGUAGE plpgsql;
 
 
--- pause all processes
-CREATE OR REPLACE FUNCTION pause_all_processes() RETURNS VOID AS $$
+CREATE OR REPLACE FUNCTION pause_all_processes(user_id INTEGER) RETURNS VOID AS $$
 BEGIN
+    -- Permission check
+    IF NOT check_permission(user_id, 'process', 'execute') THEN
+        RAISE EXCEPTION 'User % does not have permission to pause processes', user_id;
+    END IF;
+
     UPDATE processes SET state = 'waiting', updated_at = now()
     WHERE state IN ('ready', 'running');
 END;
 $$ LANGUAGE plpgsql;
 
 
--- resume all waiting processes
-CREATE OR REPLACE FUNCTION resume_all_waiting_processes() RETURNS VOID AS $$
+CREATE OR REPLACE FUNCTION resume_all_waiting_processes(user_id INTEGER) RETURNS VOID AS $$
 BEGIN
+    -- Permission check
+    IF NOT check_permission(user_id, 'process', 'execute') THEN
+        RAISE EXCEPTION 'User % does not have permission to resume processes', user_id;
+    END IF;
+
     UPDATE processes SET state = 'ready', updated_at = now()
     WHERE state = 'waiting';
 END;
@@ -332,8 +356,7 @@ CREATE TABLE IF NOT EXISTS threads (
 -- Insert a default configuration (priority-based)
 INSERT INTO scheduler_config (policy) VALUES ('priority')
 ON CONFLICT DO NOTHING;
--- Modified scheduler function with switch based on policy
-CREATE OR REPLACE FUNCTION schedule_processes() RETURNS VOID AS $$
+CREATE OR REPLACE FUNCTION schedule_processes(user_id INTEGER) RETURNS VOID AS $$
 DECLARE
     cfg RECORD;
     next_process RECORD;
@@ -383,7 +406,7 @@ BEGIN
         END IF;
 
         -- Execute the chosen process
-        CALL execute_process(next_process.id);
+        CALL execute_process(user_id, next_process.id);
 
     END LOOP;
 END;
@@ -574,14 +597,13 @@ $$ LANGUAGE plpgsql;
 
 
 
--- handle signals before execution. This can be called at the start of execute_process, or periodically by the scheduler
-CREATE OR REPLACE FUNCTION handle_signals(process_id INTEGER) RETURNS VOID AS $$
+CREATE OR REPLACE FUNCTION handle_signals(user_id INTEGER, process_id INTEGER) RETURNS VOID AS $$
 DECLARE
     sig RECORD;
 BEGIN
     FOR sig IN SELECT * FROM signals WHERE process_id = process_id LOOP
         IF sig.signal_type = 'SIGTERM' THEN
-            PERFORM terminate_process(process_id);
+            PERFORM terminate_process(user_id, process_id);
         ELSIF sig.signal_type = 'SIGSTOP' THEN
             UPDATE processes SET state = 'waiting', updated_at = now() WHERE id = process_id AND state != 'terminated';
             PERFORM log_process_action(process_id, 'Process paused by signal');
