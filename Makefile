@@ -2,7 +2,7 @@ EXTENSION = pg_os
 DATA = pg_os--1.0.sql
 PG_CONFIG ?= pg_config
 
-REGRESS = pg_os_basic create_user lock_file create_process modules
+REGRESS = pg_os_basic create_user lock_file create_process load_unload_module modules
 REGRESS_OPTS = --outputdir=/tmp/pg_os_regress
 
 PGXS := $(shell $(PG_CONFIG) --pgxs)
