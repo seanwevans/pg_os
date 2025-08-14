@@ -27,8 +27,7 @@ CREATE TABLE IF NOT EXISTS threads (
 -- Insert a default configuration (priority-based)
 INSERT INTO scheduler_config (policy) VALUES ('priority')
 ON CONFLICT DO NOTHING;
--- Modified scheduler function with switch based on policy
-CREATE OR REPLACE FUNCTION schedule_processes() RETURNS VOID AS $$
+CREATE OR REPLACE FUNCTION schedule_processes(user_id INTEGER) RETURNS VOID AS $$
 DECLARE
     cfg RECORD;
     next_process RECORD;
@@ -78,12 +77,12 @@ BEGIN
         END IF;
 
         -- Execute the chosen process
-        CALL execute_process(next_process.id);
+        CALL execute_process(user_id, next_process.id);
 
     END LOOP;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, pg_temp;
-ALTER FUNCTION schedule_processes() OWNER TO pg_os_admin;
+ALTER FUNCTION schedule_processes(INTEGER) OWNER TO pg_os_admin;
 
 
 -- thread scheduler

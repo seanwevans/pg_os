@@ -55,13 +55,17 @@ $$;
 ALTER PROCEDURE create_process(TEXT, INTEGER, INTEGER) OWNER TO pg_os_admin;
 
 
--- start a process
-CREATE OR REPLACE PROCEDURE start_process(process_id INTEGER)
+CREATE OR REPLACE PROCEDURE start_process(user_id INTEGER, process_id INTEGER)
 LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = pg_catalog, pg_temp
 AS $$
 BEGIN
+    -- Permission check
+    IF NOT check_permission(user_id, 'process', 'execute') THEN
+        RAISE EXCEPTION 'User % does not have permission to start processes', user_id;
+    END IF;
+
     -- Update the process state to 'ready' only if it's currently 'new'
     UPDATE processes
     SET state = 'ready', updated_at = now()
@@ -76,11 +80,10 @@ EXCEPTION
         RAISE EXCEPTION 'Failed to start process %: %', process_id, SQLERRM;
 END;
 $$;
-ALTER PROCEDURE start_process(INTEGER) OWNER TO pg_os_admin;
+ALTER PROCEDURE start_process(INTEGER, INTEGER) OWNER TO pg_os_admin;
 
 
--- execute a process
-CREATE OR REPLACE PROCEDURE execute_process(process_id INTEGER)
+CREATE OR REPLACE PROCEDURE execute_process(user_id INTEGER, process_id INTEGER)
 LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = pg_catalog, pg_temp
@@ -88,6 +91,11 @@ AS $$
 DECLARE
     exec_duration INTEGER;
 BEGIN
+    -- Permission check
+    IF NOT check_permission(user_id, 'process', 'execute') THEN
+        RAISE EXCEPTION 'User % does not have permission to execute processes', user_id;
+    END IF;
+
     -- Check if the process is ready
     UPDATE processes
     SET state = 'running', updated_at = now()
@@ -120,7 +128,7 @@ EXCEPTION
         RAISE EXCEPTION 'Failed to execute process %: %', process_id, SQLERRM;
 END;
 $$;
-ALTER PROCEDURE execute_process(INTEGER) OWNER TO pg_os_admin;
+ALTER PROCEDURE execute_process(INTEGER, INTEGER) OWNER TO pg_os_admin;
 
 
 
@@ -146,25 +154,33 @@ $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, pg_temp;
 ALTER FUNCTION list_ready_or_running_processes() OWNER TO pg_os_admin;
 
 
--- set process priority
-CREATE OR REPLACE FUNCTION set_process_priority(process_id INTEGER, new_priority INTEGER) RETURNS VOID AS $$
+CREATE OR REPLACE FUNCTION set_process_priority(user_id INTEGER, process_id INTEGER, new_priority INTEGER) RETURNS VOID AS $$
 BEGIN
+    -- Permission check
+    IF NOT check_permission(user_id, 'process', 'execute') THEN
+        RAISE EXCEPTION 'User % does not have permission to set process priority', user_id;
+    END IF;
+
     UPDATE processes SET priority = new_priority, updated_at = now()
     WHERE id = process_id;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, pg_temp;
-ALTER FUNCTION set_process_priority(INTEGER, INTEGER) OWNER TO pg_os_admin;
+ALTER FUNCTION set_process_priority(INTEGER, INTEGER, INTEGER) OWNER TO pg_os_admin;
 
 
--- terminate process
-CREATE OR REPLACE FUNCTION terminate_process(process_id INTEGER) RETURNS VOID AS $$
+CREATE OR REPLACE FUNCTION terminate_process(user_id INTEGER, process_id INTEGER) RETURNS VOID AS $$
 BEGIN
+    -- Permission check
+    IF NOT check_permission(user_id, 'process', 'execute') THEN
+        RAISE EXCEPTION 'User % does not have permission to terminate processes', user_id;
+    END IF;
+
     UPDATE processes
     SET state = 'terminated', updated_at = now()
     WHERE id = process_id AND state != 'terminated';
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, pg_temp;
-ALTER FUNCTION terminate_process(INTEGER) OWNER TO pg_os_admin;
+ALTER FUNCTION terminate_process(INTEGER, INTEGER) OWNER TO pg_os_admin;
 
 
 -- log process
@@ -186,21 +202,29 @@ $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, pg_temp;
 ALTER FUNCTION process_count_by_state() OWNER TO pg_os_admin;
 
 
--- pause all processes
-CREATE OR REPLACE FUNCTION pause_all_processes() RETURNS VOID AS $$
+CREATE OR REPLACE FUNCTION pause_all_processes(user_id INTEGER) RETURNS VOID AS $$
 BEGIN
+    -- Permission check
+    IF NOT check_permission(user_id, 'process', 'execute') THEN
+        RAISE EXCEPTION 'User % does not have permission to pause processes', user_id;
+    END IF;
+
     UPDATE processes SET state = 'waiting', updated_at = now()
     WHERE state IN ('ready', 'running');
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, pg_temp;
-ALTER FUNCTION pause_all_processes() OWNER TO pg_os_admin;
+ALTER FUNCTION pause_all_processes(INTEGER) OWNER TO pg_os_admin;
 
 
--- resume all waiting processes
-CREATE OR REPLACE FUNCTION resume_all_waiting_processes() RETURNS VOID AS $$
+CREATE OR REPLACE FUNCTION resume_all_waiting_processes(user_id INTEGER) RETURNS VOID AS $$
 BEGIN
+    -- Permission check
+    IF NOT check_permission(user_id, 'process', 'execute') THEN
+        RAISE EXCEPTION 'User % does not have permission to resume processes', user_id;
+    END IF;
+
     UPDATE processes SET state = 'ready', updated_at = now()
     WHERE state = 'waiting';
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, pg_temp;
-ALTER FUNCTION resume_all_waiting_processes() OWNER TO pg_os_admin;
+ALTER FUNCTION resume_all_waiting_processes(INTEGER) OWNER TO pg_os_admin;

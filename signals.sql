@@ -22,14 +22,13 @@ ALTER FUNCTION send_signal(INTEGER, TEXT) OWNER TO pg_os_admin;
 
 
 
--- handle signals before execution. This can be called at the start of execute_process, or periodically by the scheduler
-CREATE OR REPLACE FUNCTION handle_signals(process_id INTEGER) RETURNS VOID AS $$
+CREATE OR REPLACE FUNCTION handle_signals(user_id INTEGER, process_id INTEGER) RETURNS VOID AS $$
 DECLARE
     sig RECORD;
 BEGIN
     FOR sig IN SELECT * FROM signals WHERE process_id = process_id LOOP
         IF sig.signal_type = 'SIGTERM' THEN
-            PERFORM terminate_process(process_id);
+            PERFORM terminate_process(user_id, process_id);
         ELSIF sig.signal_type = 'SIGSTOP' THEN
             UPDATE processes SET state = 'waiting', updated_at = now() WHERE id = process_id AND state != 'terminated';
             PERFORM log_process_action(process_id, 'Process paused by signal');
@@ -43,4 +42,4 @@ BEGIN
     END LOOP;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, pg_temp;
-ALTER FUNCTION handle_signals(INTEGER) OWNER TO pg_os_admin;
+ALTER FUNCTION handle_signals(INTEGER, INTEGER) OWNER TO pg_os_admin;
