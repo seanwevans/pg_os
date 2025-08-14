@@ -1,0 +1,22 @@
+\set ECHO none
+SELECT check_permission(1, 'process', 'execute') AS alice_allowed;
+ alice_allowed 
+---------------
+ t
+(1 row)
+
+SELECT check_permission(2, 'process', 'execute') AS bob_allowed;
+ bob_allowed 
+-------------
+ f
+(1 row)
+
+CALL create_process('alice_proc', 1);
+CALL create_process('bob_proc', 2);
+ERROR:  Could not create process: User 2 does not have permission to create a process
+SELECT name, owner_user_id FROM processes ORDER BY name;
+    name    | owner_user_id 
+------------+---------------
+ alice_proc |             1
+(1 row)
+

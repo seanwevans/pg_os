@@ -96,7 +96,7 @@ $$ LANGUAGE plpgsql;
 
 
 -- check permissions
-CREATE OR REPLACE FUNCTION check_permission(user_id INTEGER, resource_type TEXT, action TEXT) RETURNS BOOLEAN AS $$
+CREATE OR REPLACE FUNCTION check_permission(p_user_id INTEGER, p_resource_type TEXT, p_action TEXT) RETURNS BOOLEAN AS $$
 DECLARE
     allowed BOOLEAN;
 BEGIN
@@ -104,9 +104,9 @@ BEGIN
     SELECT TRUE INTO allowed
     FROM user_roles ur
     JOIN permissions p ON ur.role_id = p.role_id
-    WHERE ur.user_id = user_id
-      AND p.resource_type = resource_type
-      AND p.action = action
+    WHERE ur.user_id = p_user_id
+      AND p.resource_type = p_resource_type
+      AND p.action = p_action
     LIMIT 1;
 
     IF allowed THEN
@@ -117,9 +117,9 @@ BEGIN
     SELECT TRUE INTO allowed
     FROM user_groups ug
     JOIN group_permissions gp ON ug.group_id = gp.group_id
-    WHERE ug.user_id = user_id
-      AND gp.resource_type = resource_type
-      AND gp.action = action
+    WHERE ug.user_id = p_user_id
+      AND gp.resource_type = p_resource_type
+      AND gp.action = p_action
     LIMIT 1;
 
     RETURN COALESCE(allowed, FALSE);
@@ -1101,36 +1101,6 @@ CREATE TABLE IF NOT EXISTS checkpoints (
 CREATE OR REPLACE FUNCTION log_file_action(file_id INTEGER, action TEXT, user_id INTEGER) RETURNS VOID AS $$
 BEGIN
     INSERT INTO file_logs (file_id, action, performed_by) VALUES (file_id, action, user_id);
-END;
-$$ LANGUAGE plpgsql;
-
-
-
-
-BEGIN
-    SELECT * INTO f FROM files WHERE id = file_id;
-    IF NOT FOUND THEN
-        RAISE EXCEPTION 'File not found';
-    END IF;
-
-    IF f.is_directory THEN
-        RAISE EXCEPTION 'Cannot write to a directory';
-    END IF;
-
-    IF f.owner_user_id = user_id THEN
-        IF substring(f.permissions from 1 for 3) NOT LIKE '%w%' THEN
-            RAISE EXCEPTION 'Owner does not have write permission on this file';
-        END IF;
-    ELSIF NOT check_permission(user_id, 'file', 'write') THEN
-        RAISE EXCEPTION 'User % does not have permission to write files', user_id;
-    END IF;
-
-    BEGIN
-        UPDATE files SET contents = data WHERE id = file_id;
-        PERFORM log_file_action(file_id, 'write', user_id);
-    EXCEPTION WHEN others THEN
-        RAISE EXCEPTION 'Error writing to file: %', SQLERRM;
-    END;
 END;
 $$ LANGUAGE plpgsql;
 
