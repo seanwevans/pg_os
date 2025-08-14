@@ -139,11 +139,22 @@ ALTER FUNCTION change_file_permissions(INTEGER, INTEGER, TEXT) OWNER TO pg_os_ad
 
 
 -- Lock a file
+-- Requires read permission for read locks and write permission for write locks.
 CREATE OR REPLACE FUNCTION lock_file(user_id INTEGER, file_id INTEGER, mode TEXT) RETURNS VOID AS $$
 DECLARE
     f RECORD;
     existing file_locks%ROWTYPE;
 BEGIN
+    IF mode = 'write' THEN
+        IF NOT check_permission(user_id, 'file', 'write') THEN
+            RAISE EXCEPTION 'User % does not have permission to write files', user_id;
+        END IF;
+    ELSE
+        IF NOT check_permission(user_id, 'file', 'read') THEN
+            RAISE EXCEPTION 'User % does not have permission to read files', user_id;
+        END IF;
+    END IF;
+
     SELECT * INTO f FROM files WHERE id=file_id;
     IF NOT FOUND THEN
         RAISE EXCEPTION 'File not found';

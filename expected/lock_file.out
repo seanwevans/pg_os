@@ -228,18 +228,60 @@ BEGIN
     UPDATE files SET permissions = new_perms WHERE id = file_id;
 END;
 $$ LANGUAGE plpgsql;
--- Lock a file
+-- Requires read permission for read locks and write permission for write locks.
 CREATE OR REPLACE FUNCTION lock_file(user_id INTEGER, file_id INTEGER, mode TEXT) RETURNS VOID AS $$
 DECLARE
     f RECORD;
+    existing file_locks%ROWTYPE;
 BEGIN
+    IF mode = 'write' THEN
+        IF NOT check_permission(user_id, 'file', 'write') THEN
+            RAISE EXCEPTION 'User % does not have permission to write files', user_id;
+        END IF;
+    ELSE
+        IF NOT check_permission(user_id, 'file', 'read') THEN
+            RAISE EXCEPTION 'User % does not have permission to read files', user_id;
+        END IF;
+    END IF;
+
     SELECT * INTO f FROM files WHERE id=file_id;
     IF NOT FOUND THEN
         RAISE EXCEPTION 'File not found';
     END IF;
 
+    -- Check if current user already holds a lock on the file
+    SELECT * INTO existing
+      FROM file_locks
+      WHERE file_locks.file_id = lock_file.file_id
+        AND locked_by_user = user_id
+      FOR UPDATE;
+
+    IF FOUND THEN
+        -- User owns the lock; allow mode change if requested
+        IF existing.lock_mode <> mode THEN
+            UPDATE file_locks SET lock_mode = mode
+              WHERE file_locks.file_id = lock_file.file_id
+                AND locked_by_user = user_id;
+        END IF;
+        RETURN;
+    END IF;
+
+    -- Look for locks held by other users and ensure compatibility
+    SELECT * INTO existing
+      FROM file_locks
+      WHERE file_locks.file_id = lock_file.file_id
+        AND locked_by_user <> user_id
+      FOR UPDATE
+      LIMIT 1;
+
+    IF FOUND THEN
+        IF existing.lock_mode = 'write' OR mode = 'write' THEN
+            RAISE EXCEPTION 'File is already locked';
+        END IF;
+    END IF;
+
     INSERT INTO file_locks (file_id, locked_by_user, lock_mode)
-    VALUES (file_id, user_id, mode);
+    VALUES (lock_file.file_id, user_id, mode);
 END;
 $$ LANGUAGE plpgsql;
 -- Unlock a file
@@ -277,6 +319,11 @@ INSERT INTO files (id, name, owner_user_id, permissions, is_directory)
 VALUES (1, 'test.txt', 1, 'rwxr-----', false);
 INSERT INTO files (id, name, owner_user_id, permissions, is_directory)
 VALUES (2, 'test2.txt', 1, 'rwxr-----', false);
+-- grant permissions for locking
+INSERT INTO roles (id, role_name) VALUES (1, 'file_rw');
+INSERT INTO permissions (role_id, resource_type, action)
+VALUES (1, 'file', 'read'), (1, 'file', 'write');
+INSERT INTO user_roles (user_id, role_id) VALUES (1, 1);
 -- successful lock
 SELECT lock_file(1, 1, 'read');
  lock_file 
@@ -285,9 +332,13 @@ SELECT lock_file(1, 1, 'read');
 (1 row)
 
 \set ON_ERROR_STOP off
--- duplicate lock should fail
+-- duplicate lock should succeed
 SELECT lock_file(1, 1, 'read');
-ERROR:  duplicate key value violates unique constraint "file_locks_pkey"
+ lock_file
+-----------
+
+(1 row)
+
 -- non-existent file should fail
 SELECT lock_file(1, 999, 'read');
 ERROR:  File not found
