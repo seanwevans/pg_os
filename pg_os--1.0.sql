@@ -1230,7 +1230,8 @@ BEGIN
         UPDATE device_queue SET completed=TRUE WHERE id=req.id;
     END LOOP;
 END;
-$$ LANGUAGE plpgsql;-------------------------
+$$ LANGUAGE plpgsql;
+-------------------------
 -- NETWORKING
 -------------------------
 
@@ -1265,7 +1266,8 @@ BEGIN
     -- Just simulate logging the send
     RAISE NOTICE 'Sending packet from socket % to %: %', socket_id, s.connected_to, data;
 END;
-$$ LANGUAGE plpgsql;-----------
+$$ LANGUAGE plpgsql;
+-----------
 -- MODULES
 -----------
 
@@ -1288,7 +1290,8 @@ CREATE OR REPLACE FUNCTION unload_module(module_name TEXT) RETURNS VOID AS $$
 BEGIN
     UPDATE modules SET loaded=FALSE WHERE module_name=module_name;
 END;
-$$ LANGUAGE plpgsql;--------------------
+$$ LANGUAGE plpgsql;
+--------------------
 -- POWER MANAGEMENT
 --------------------
 
