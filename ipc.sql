@@ -76,8 +76,10 @@ BEGIN
         RAISE EXCEPTION 'User % does not have permission to read channels', user_id;
     END IF;
 
-    RETURN QUERY SELECT message FROM channel_messages WHERE channel_id = ch.id ORDER BY timestamp;
-    DELETE FROM channel_messages WHERE channel_id = ch.id;
+    RETURN QUERY DELETE FROM channel_messages
+        WHERE channel_id = ch.id
+        ORDER BY timestamp
+        RETURNING message;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, pg_temp;
 ALTER FUNCTION read_channel(INTEGER, TEXT) OWNER TO pg_os_admin;
