@@ -1004,6 +1004,7 @@ BEGIN
     END IF;
 
     RETURN QUERY SELECT message FROM channel_messages WHERE channel_id = ch.id ORDER BY timestamp;
+    DELETE FROM channel_messages WHERE channel_id = ch.id;
 END;
 $$ LANGUAGE plpgsql;
 

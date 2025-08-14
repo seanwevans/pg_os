@@ -77,6 +77,7 @@ BEGIN
     END IF;
 
     RETURN QUERY SELECT message FROM channel_messages WHERE channel_id = ch.id ORDER BY timestamp;
+    DELETE FROM channel_messages WHERE channel_id = ch.id;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, pg_temp;
 ALTER FUNCTION read_channel(INTEGER, TEXT) OWNER TO pg_os_admin;
