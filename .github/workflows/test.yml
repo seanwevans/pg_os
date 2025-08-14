@@ -11,6 +11,9 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y postgresql postgresql-contrib postgresql-server-dev-all
+      - name: Start PostgreSQL
+        run: |
+          sudo pg_ctlcluster $(pg_config --version | awk '{print $2}' | cut -d. -f1) main start
       - name: Run tests
         run: |
           make install
