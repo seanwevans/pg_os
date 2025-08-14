@@ -1288,7 +1288,7 @@ $$ LANGUAGE plpgsql;
 
 CREATE OR REPLACE FUNCTION unload_module(module_name TEXT) RETURNS VOID AS $$
 BEGIN
-    UPDATE modules SET loaded=FALSE WHERE module_name=module_name;
+    UPDATE modules SET loaded=FALSE WHERE modules.module_name = unload_module.module_name;
 END;
 $$ LANGUAGE plpgsql;
 --------------------
