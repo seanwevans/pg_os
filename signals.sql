@@ -26,7 +26,7 @@ CREATE OR REPLACE FUNCTION handle_signals(user_id INTEGER, process_id INTEGER) R
 DECLARE
     sig RECORD;
 BEGIN
-    FOR sig IN SELECT * FROM signals WHERE process_id = process_id LOOP
+    FOR sig IN SELECT * FROM signals WHERE process_id = handle_signals.process_id LOOP
         IF sig.signal_type = 'SIGTERM' THEN
             PERFORM terminate_process(user_id, process_id);
         ELSIF sig.signal_type = 'SIGSTOP' THEN
