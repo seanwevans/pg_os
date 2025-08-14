@@ -17,7 +17,8 @@ BEGIN
     INSERT INTO signals (process_id, signal_type) VALUES (target_process_id, signal_type);
     PERFORM log_process_action(target_process_id, 'Signal received: ' || signal_type);
 END;
-$$ LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, pg_temp;
+ALTER FUNCTION send_signal(INTEGER, TEXT) OWNER TO pg_os_admin;
 
 
 
@@ -41,4 +42,5 @@ BEGIN
         DELETE FROM signals WHERE id = sig.id;
     END LOOP;
 END;
-$$ LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, pg_temp;
+ALTER FUNCTION handle_signals(INTEGER) OWNER TO pg_os_admin;

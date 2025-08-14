@@ -28,11 +28,13 @@ CREATE TABLE IF NOT EXISTS process_logs (
 
 -- create a process
 CREATE OR REPLACE PROCEDURE create_process(
-    process_name TEXT, 
-    owner_id INTEGER, 
+    process_name TEXT,
+    owner_id INTEGER,
     process_priority INTEGER DEFAULT 1
 )
 LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = pg_catalog, pg_temp
 AS $$
 BEGIN
     -- Permission check
@@ -50,11 +52,14 @@ EXCEPTION
         RAISE EXCEPTION 'Could not create process: %', SQLERRM;
 END;
 $$;
+ALTER PROCEDURE create_process(TEXT, INTEGER, INTEGER) OWNER TO pg_os_admin;
 
 
 -- start a process
 CREATE OR REPLACE PROCEDURE start_process(process_id INTEGER)
 LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = pg_catalog, pg_temp
 AS $$
 BEGIN
     -- Update the process state to 'ready' only if it's currently 'new'
@@ -71,11 +76,14 @@ EXCEPTION
         RAISE EXCEPTION 'Failed to start process %: %', process_id, SQLERRM;
 END;
 $$;
+ALTER PROCEDURE start_process(INTEGER) OWNER TO pg_os_admin;
 
 
 -- execute a process
 CREATE OR REPLACE PROCEDURE execute_process(process_id INTEGER)
 LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = pg_catalog, pg_temp
 AS $$
 BEGIN
     -- Check if the process is ready
@@ -106,27 +114,30 @@ EXCEPTION
         RAISE EXCEPTION 'Failed to execute process %: %', process_id, SQLERRM;
 END;
 $$;
+ALTER PROCEDURE execute_process(INTEGER) OWNER TO pg_os_admin;
 
 
 
 
 
 -- list all processes by state
-CREATE OR REPLACE FUNCTION list_processes_by_state(state_filter TEXT) 
+CREATE OR REPLACE FUNCTION list_processes_by_state(state_filter TEXT)
 RETURNS SETOF processes AS $$
 BEGIN
     RETURN QUERY SELECT * FROM processes WHERE state = state_filter;
 END;
-$$ LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, pg_temp;
+ALTER FUNCTION list_processes_by_state(TEXT) OWNER TO pg_os_admin;
 
 
 -- list all running or ready processes by priority
-CREATE OR REPLACE FUNCTION list_ready_or_running_processes() 
+CREATE OR REPLACE FUNCTION list_ready_or_running_processes()
 RETURNS SETOF processes AS $$
 BEGIN
     RETURN QUERY SELECT * FROM processes WHERE state IN ('ready', 'running') ORDER BY priority DESC, created_at;
 END;
-$$ LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, pg_temp;
+ALTER FUNCTION list_ready_or_running_processes() OWNER TO pg_os_admin;
 
 
 -- set process priority
@@ -135,7 +146,8 @@ BEGIN
     UPDATE processes SET priority = new_priority, updated_at = now()
     WHERE id = process_id;
 END;
-$$ LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, pg_temp;
+ALTER FUNCTION set_process_priority(INTEGER, INTEGER) OWNER TO pg_os_admin;
 
 
 -- terminate process
@@ -145,7 +157,8 @@ BEGIN
     SET state = 'terminated', updated_at = now()
     WHERE id = process_id AND state != 'terminated';
 END;
-$$ LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, pg_temp;
+ALTER FUNCTION terminate_process(INTEGER) OWNER TO pg_os_admin;
 
 
 -- log process
@@ -153,7 +166,8 @@ CREATE OR REPLACE FUNCTION log_process_action(process_id INTEGER, action TEXT) R
 BEGIN
     INSERT INTO process_logs (process_id, action) VALUES (process_id, action);
 END;
-$$ LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, pg_temp;
+ALTER FUNCTION log_process_action(INTEGER, TEXT) OWNER TO pg_os_admin;
 
 
 -- count states
@@ -162,7 +176,8 @@ BEGIN
     RETURN QUERY
     SELECT state, COUNT(*) FROM processes GROUP BY state;
 END;
-$$ LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, pg_temp;
+ALTER FUNCTION process_count_by_state() OWNER TO pg_os_admin;
 
 
 -- pause all processes
@@ -171,7 +186,8 @@ BEGIN
     UPDATE processes SET state = 'waiting', updated_at = now()
     WHERE state IN ('ready', 'running');
 END;
-$$ LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, pg_temp;
+ALTER FUNCTION pause_all_processes() OWNER TO pg_os_admin;
 
 
 -- resume all waiting processes
@@ -180,4 +196,5 @@ BEGIN
     UPDATE processes SET state = 'ready', updated_at = now()
     WHERE state = 'waiting';
 END;
-$$ LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, pg_temp;
+ALTER FUNCTION resume_all_waiting_processes() OWNER TO pg_os_admin;

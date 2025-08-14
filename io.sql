@@ -29,7 +29,8 @@ BEGIN
 
     INSERT INTO device_queue (device_id, request_type, data) VALUES (dev.id, request_type, data);
 END;
-$$ LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, pg_temp;
+ALTER FUNCTION enqueue_io_request(TEXT, TEXT, TEXT) OWNER TO pg_os_admin;
 
 CREATE OR REPLACE FUNCTION process_device_queue(device_name TEXT) RETURNS VOID AS $$
 DECLARE
@@ -47,4 +48,5 @@ BEGIN
         UPDATE device_queue SET completed=TRUE WHERE id=req.id;
     END LOOP;
 END;
-$$ LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, pg_temp;
+ALTER FUNCTION process_device_queue(TEXT) OWNER TO pg_os_admin;

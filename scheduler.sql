@@ -82,7 +82,8 @@ BEGIN
 
     END LOOP;
 END;
-$$ LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, pg_temp;
+ALTER FUNCTION schedule_processes() OWNER TO pg_os_admin;
 
 
 -- thread scheduler
@@ -105,4 +106,5 @@ BEGIN
         UPDATE threads SET state='ready', updated_at=now() WHERE id=next_thread.id;
     END LOOP;
 END;
-$$ LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, pg_temp;
+ALTER FUNCTION schedule_threads() OWNER TO pg_os_admin;

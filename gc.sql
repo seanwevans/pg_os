@@ -23,7 +23,8 @@ BEGIN
         -- In a real scenario, you might archive logs or process records here
     END LOOP;
 END;
-$$ LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, pg_temp;
+ALTER FUNCTION cleanup_terminated_processes(INTERVAL) OWNER TO pg_os_admin;
 
 
 -- Helper function to free all memory for a terminated process
@@ -41,4 +42,5 @@ BEGIN
            AND segment_id = seg_id;
     END LOOP;
 END;
-$$ LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, pg_temp;
+ALTER FUNCTION free_all_memory_for_process(INTEGER) OWNER TO pg_os_admin;

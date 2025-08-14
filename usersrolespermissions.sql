@@ -2,6 +2,15 @@
 -- USER, ROLES & PERMISSIONS
 -----------------------------
 
+-- ensure trusted role for security-definer functions
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'pg_os_admin') THEN
+        CREATE ROLE pg_os_admin;
+    END IF;
+END;
+$$;
+
 
 -- users
 CREATE TABLE IF NOT EXISTS users (
@@ -62,7 +71,8 @@ BEGIN
     INSERT INTO users (username) VALUES (name) RETURNING id INTO new_user_id;
     RETURN new_user_id;
 END;
-$$ LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, pg_temp;
+ALTER FUNCTION create_user(TEXT) OWNER TO pg_os_admin;
 
 
 -- create a role
@@ -73,7 +83,8 @@ BEGIN
     INSERT INTO roles (role_name) VALUES (role_name) RETURNING id INTO new_role_id;
     RETURN new_role_id;
 END;
-$$ LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, pg_temp;
+ALTER FUNCTION create_role(TEXT) OWNER TO pg_os_admin;
 
 
 -- Assign a role to a user
@@ -81,7 +92,8 @@ CREATE OR REPLACE FUNCTION assign_role_to_user(user_id INTEGER, role_id INTEGER)
 BEGIN
     INSERT INTO user_roles (user_id, role_id) VALUES (user_id, role_id);
 END;
-$$ LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, pg_temp;
+ALTER FUNCTION assign_role_to_user(INTEGER, INTEGER) OWNER TO pg_os_admin;
 
 
 -- Grant permission to a role
@@ -89,7 +101,8 @@ CREATE OR REPLACE FUNCTION grant_permission_to_role(role_id INTEGER, resource_ty
 BEGIN
     INSERT INTO permissions (role_id, resource_type, action) VALUES (role_id, resource_type, action);
 END;
-$$ LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, pg_temp;
+ALTER FUNCTION grant_permission_to_role(INTEGER, TEXT, TEXT) OWNER TO pg_os_admin;
 
 
 -- check permissions
@@ -121,4 +134,5 @@ BEGIN
 
     RETURN COALESCE(allowed, FALSE);
 END;
-$$ LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, pg_temp;
+ALTER FUNCTION check_permission(INTEGER, TEXT, TEXT) OWNER TO pg_os_admin;
