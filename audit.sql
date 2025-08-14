@@ -83,6 +83,7 @@ BEGIN
     END IF;
 
     BEGIN
+        PERFORM version_file(file_id);
         UPDATE files SET contents = data WHERE id = file_id;
         PERFORM log_file_action(file_id, 'write', user_id);
     EXCEPTION WHEN others THEN
