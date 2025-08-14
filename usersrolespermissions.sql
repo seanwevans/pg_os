@@ -2,14 +2,6 @@
 -- USER, ROLES & PERMISSIONS
 -----------------------------
 
--- ensure trusted role for security-definer functions
-DO $$
-BEGIN
-    IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'pg_os_admin') THEN
-        CREATE ROLE pg_os_admin;
-    END IF;
-END;
-$$;
 
 
 -- users
@@ -68,12 +60,13 @@ CREATE OR REPLACE FUNCTION create_user(name TEXT) RETURNS INTEGER AS $$
 DECLARE
     new_user_id INTEGER;
 BEGIN
+    IF name IS NULL OR btrim(name) = '' THEN
+        RAISE EXCEPTION 'username cannot be empty';
+    END IF;
     INSERT INTO users (username) VALUES (name) RETURNING id INTO new_user_id;
     RETURN new_user_id;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, pg_temp;
-ALTER FUNCTION create_user(TEXT) OWNER TO pg_os_admin;
-
+$$ LANGUAGE plpgsql;
 
 -- create a role
 CREATE OR REPLACE FUNCTION create_role(role_name TEXT) RETURNS INTEGER AS $$
@@ -83,30 +76,24 @@ BEGIN
     INSERT INTO roles (role_name) VALUES (role_name) RETURNING id INTO new_role_id;
     RETURN new_role_id;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, pg_temp;
-ALTER FUNCTION create_role(TEXT) OWNER TO pg_os_admin;
-
+$$ LANGUAGE plpgsql;
 
 -- Assign a role to a user
 CREATE OR REPLACE FUNCTION assign_role_to_user(user_id INTEGER, role_id INTEGER) RETURNS VOID AS $$
 BEGIN
     INSERT INTO user_roles (user_id, role_id) VALUES (user_id, role_id);
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, pg_temp;
-ALTER FUNCTION assign_role_to_user(INTEGER, INTEGER) OWNER TO pg_os_admin;
-
+$$ LANGUAGE plpgsql;
 
 -- Grant permission to a role
 CREATE OR REPLACE FUNCTION grant_permission_to_role(role_id INTEGER, resource_type TEXT, action TEXT) RETURNS VOID AS $$
 BEGIN
     INSERT INTO permissions (role_id, resource_type, action) VALUES (role_id, resource_type, action);
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, pg_temp;
-ALTER FUNCTION grant_permission_to_role(INTEGER, TEXT, TEXT) OWNER TO pg_os_admin;
-
+$$ LANGUAGE plpgsql;
 
 -- check permissions
-CREATE OR REPLACE FUNCTION check_permission(user_id INTEGER, resource_type TEXT, action TEXT) RETURNS BOOLEAN AS $$
+CREATE OR REPLACE FUNCTION check_permission(p_user_id INTEGER, p_resource_type TEXT, p_action TEXT) RETURNS BOOLEAN AS $$
 DECLARE
     allowed BOOLEAN;
 BEGIN
@@ -114,9 +101,9 @@ BEGIN
     SELECT TRUE INTO allowed
     FROM user_roles ur
     JOIN permissions p ON ur.role_id = p.role_id
-    WHERE ur.user_id = user_id
-      AND p.resource_type = resource_type
-      AND p.action = action
+    WHERE ur.user_id = p_user_id
+      AND p.resource_type = p_resource_type
+      AND p.action = p_action
     LIMIT 1;
 
     IF allowed THEN
@@ -127,12 +114,11 @@ BEGIN
     SELECT TRUE INTO allowed
     FROM user_groups ug
     JOIN group_permissions gp ON ug.group_id = gp.group_id
-    WHERE ug.user_id = user_id
-      AND gp.resource_type = resource_type
-      AND gp.action = action
+    WHERE ug.user_id = p_user_id
+      AND gp.resource_type = p_resource_type
+      AND gp.action = p_action
     LIMIT 1;
 
     RETURN COALESCE(allowed, FALSE);
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, pg_temp;
-ALTER FUNCTION check_permission(INTEGER, TEXT, TEXT) OWNER TO pg_os_admin;
+$$ LANGUAGE plpgsql;
