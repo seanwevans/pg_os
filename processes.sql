@@ -3,7 +3,7 @@
 -------------
 
 -- processes
-CREATE TABLE processes (
+CREATE TABLE IF NOT EXISTS processes (
     id SERIAL PRIMARY KEY,
     name TEXT NOT NULL UNIQUE,
     state TEXT NOT NULL CHECK (state IN ('new', 'ready', 'running', 'waiting', 'terminated')),
