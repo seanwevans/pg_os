@@ -85,6 +85,8 @@ LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = pg_catalog, pg_temp
 AS $$
+DECLARE
+    exec_duration INTEGER;
 BEGIN
     -- Check if the process is ready
     UPDATE processes
@@ -100,7 +102,11 @@ BEGIN
     PERFORM log_process_action(process_id, 'Execution started');
 
     -- Simulate work
-    PERFORM pg_sleep(1);
+    SELECT duration INTO exec_duration FROM processes WHERE id = process_id;
+    IF exec_duration IS NULL OR exec_duration < 0 THEN
+        exec_duration := 0;
+    END IF;
+    PERFORM pg_sleep(exec_duration);
 
     -- Mark process as terminated
     UPDATE processes
