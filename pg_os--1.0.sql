@@ -695,9 +695,21 @@ BEGIN
     IF NOT check_permission(user_id, 'memory', 'allocate') THEN
         RAISE EXCEPTION 'User % does not have permission to free memory', user_id;
     END IF;
+    BEGIN
+        PERFORM pg_advisory_lock(1);
 
-    DELETE FROM process_memory WHERE process_id = process_id AND segment_id = segment_id;
-    UPDATE memory_segments SET allocated = FALSE, allocated_to = NULL WHERE id = segment_id;
+        DELETE FROM process_memory
+            WHERE process_id = free_memory.process_id
+              AND segment_id = free_memory.segment_id;
+        UPDATE memory_segments
+            SET allocated = FALSE, allocated_to = NULL
+            WHERE id = free_memory.segment_id;
+
+        PERFORM pg_advisory_unlock(1);
+    EXCEPTION WHEN others THEN
+        PERFORM pg_advisory_unlock(1);
+        RAISE;
+    END;
     PERFORM log_memory_action(process_id, 'Memory freed: segment ' || segment_id, user_id, segment_id);
 END;
 $$ LANGUAGE plpgsql;
