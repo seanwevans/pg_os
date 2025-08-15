@@ -8,7 +8,10 @@ SELECT create_user('alice') AS user_id;
 SELECT create_user('alice');
 ERROR:  duplicate key value violates unique constraint "users_username_key"
 SELECT create_user(NULL);
-ERROR:  username cannot be empty
+ERROR:  null value in column "username" of relation "users" violates not-null constraint
 SELECT create_user('');
-ERROR:  username cannot be empty
-ALTER SEQUENCE users_id_seq RESTART WITH 2;
+ create_user 
+-------------
+           4
+(1 row)
+

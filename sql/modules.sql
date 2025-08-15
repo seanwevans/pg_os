@@ -1,32 +1,8 @@
 -- tests for load_module and unload_module
 \set ECHO none
 SET client_min_messages TO warning;
-
-DROP TABLE IF EXISTS modules CASCADE;
-
-CREATE TABLE modules (
-    id SERIAL PRIMARY KEY,
-    module_name TEXT UNIQUE NOT NULL,
-    loaded BOOLEAN DEFAULT FALSE,
-    code TEXT,
-    created_at TIMESTAMP DEFAULT now()
-);
-
-CREATE OR REPLACE FUNCTION load_module(module_name TEXT) RETURNS VOID AS $$
-BEGIN
-    UPDATE modules
-    SET loaded = TRUE
-    WHERE modules.module_name = load_module.module_name;
-END;
-$$ LANGUAGE plpgsql;
-
-CREATE OR REPLACE FUNCTION unload_module(module_name TEXT) RETURNS VOID AS $$
-BEGIN
-    UPDATE modules
-    SET loaded = FALSE
-    WHERE modules.module_name = unload_module.module_name;
-END;
-$$ LANGUAGE plpgsql;
+DROP EXTENSION IF EXISTS pg_os CASCADE;
+CREATE EXTENSION pg_os;
 
 INSERT INTO modules (module_name) VALUES ('mod1'), ('mod2');
 

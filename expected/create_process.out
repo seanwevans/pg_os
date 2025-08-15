@@ -1,19 +1,27 @@
 -- tests for create_process
 \set ECHO none
-SELECT create_user('carol') AS user_id;
- user_id 
----------
-       2
+SELECT create_user('carol') AS carol_id 
+SELECT create_role('executor') AS role_id 
+SELECT assign_role_to_user(1, 1);
+ assign_role_to_user 
+---------------------
+ 
 (1 row)
 
-CALL create_process('proc_ok', 2, 5);
+SELECT grant_permission_to_role(1, 'process', 'execute');
+ grant_permission_to_role 
+--------------------------
+ 
+(1 row)
+
+CALL create_process('proc_ok', 1, 5);
 SELECT name, state, priority, owner_user_id FROM processes;
   name   | state | priority | owner_user_id 
 ---------+-------+----------+---------------
- proc_ok | new   |        5 |             2
+ proc_ok | new   |        5 |             1
 (1 row)
 
-CALL create_process('proc_ok', 2, 5);
+CALL create_process('proc_ok', 1, 5);
 ERROR:  Process name proc_ok already exists
 CALL create_process('other', 999, 1);
-ERROR:  insert or update on table "processes" violates foreign key constraint "processes_owner_user_id_fkey"
+ERROR:  Could not create process: User 999 does not have permission to create a process

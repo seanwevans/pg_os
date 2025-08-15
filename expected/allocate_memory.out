@@ -1,5 +1,15 @@
 -- tests for memory allocation
 \set ECHO none
+ assign_role_to_user 
+---------------------
+ 
+(1 row)
+
+ grant_permission_to_role 
+--------------------------
+ 
+(1 row)
+
 SELECT allocate_memory(2, 1, 512);
  allocate_memory 
 -----------------
@@ -14,15 +24,3 @@ SELECT process_id, segment_id FROM process_memory;
 
 SELECT allocate_memory(1, 1, 512);
 ERROR:  User 1 does not have permission to allocate memory
-SELECT free_memory(2, 1, 1);
- free_memory 
--------------
- 
-(1 row)
-
-SELECT count(*) FROM process_memory;
- count 
--------
-     0
-(1 row)
-

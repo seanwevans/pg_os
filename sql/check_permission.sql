@@ -1,9 +1,10 @@
 \set ECHO none
 SET client_min_messages TO warning;
+DROP EXTENSION IF EXISTS pg_os CASCADE;
 DROP SCHEMA IF EXISTS pgos_test CASCADE;
 CREATE SCHEMA pgos_test;
+CREATE EXTENSION pg_os WITH SCHEMA pgos_test;
 SET search_path TO pgos_test;
-\i :abs_srcdir/../pg_os--1.0.sql
 
 -- setup users, role and permissions
 SELECT create_user('alice') AS alice_id \gset
