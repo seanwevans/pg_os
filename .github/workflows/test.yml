@@ -22,5 +22,4 @@ jobs:
       - name: Run tests
         run: |
           make install
-          sudo chown -R postgres:postgres .
           sudo -u postgres make installcheck
