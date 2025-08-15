@@ -38,7 +38,6 @@ BEGIN
     INSERT INTO channels (name) VALUES (channel_name);
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, pg_temp;
-ALTER FUNCTION register_channel(INTEGER, TEXT) OWNER TO pg_os_admin;
 
 
 -- Write to a channel
@@ -59,7 +58,6 @@ BEGIN
     VALUES (ch.id, sender_process_id, msg);
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, pg_temp;
-ALTER FUNCTION write_channel(INTEGER, TEXT, INTEGER, TEXT) OWNER TO pg_os_admin;
 
 
 -- Read from a channel (retrieve all new messages)
@@ -82,7 +80,6 @@ BEGIN
         RETURNING message;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, pg_temp;
-ALTER FUNCTION read_channel(INTEGER, TEXT) OWNER TO pg_os_admin;
 
 
 -- Send mail
@@ -95,7 +92,6 @@ BEGIN
     INSERT INTO mailbox (recipient_user_id, sender_user_id, message) VALUES (recipient_user_id, sender_user_id, msg);
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, pg_temp;
-ALTER FUNCTION send_mail(INTEGER, INTEGER, TEXT) OWNER TO pg_os_admin;
 
 
 -- Check mail
@@ -108,4 +104,3 @@ BEGIN
     RETURN QUERY SELECT message FROM mailbox WHERE recipient_user_id = user_id ORDER BY timestamp;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, pg_temp;
-ALTER FUNCTION check_mail(INTEGER) OWNER TO pg_os_admin;

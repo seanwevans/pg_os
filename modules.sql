@@ -18,7 +18,6 @@ BEGIN
     -- In practice, you'd dynamically execute code or extend functionality
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, pg_temp;
-ALTER FUNCTION load_module(TEXT) OWNER TO pg_os_admin;
 
 CREATE OR REPLACE FUNCTION unload_module(module_name TEXT) RETURNS VOID AS $$
 BEGIN
@@ -27,4 +26,3 @@ BEGIN
     WHERE modules.module_name = unload_module.module_name;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, pg_temp;
-ALTER FUNCTION unload_module(TEXT) OWNER TO pg_os_admin;

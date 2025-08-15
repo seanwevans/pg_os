@@ -18,7 +18,6 @@ BEGIN
     PERFORM log_process_action(target_process_id, 'Signal received: ' || signal_type);
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, pg_temp;
-ALTER FUNCTION send_signal(INTEGER, TEXT) OWNER TO pg_os_admin;
 
 
 
@@ -42,4 +41,3 @@ BEGIN
     END LOOP;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, pg_temp;
-ALTER FUNCTION handle_signals(INTEGER, INTEGER) OWNER TO pg_os_admin;

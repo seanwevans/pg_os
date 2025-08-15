@@ -16,4 +16,3 @@ BEGIN
     INSERT INTO power_states (state) VALUES (new_state);
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, pg_temp;
-ALTER FUNCTION set_power_state(TEXT) OWNER TO pg_os_admin;

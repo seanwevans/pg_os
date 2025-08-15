@@ -26,7 +26,6 @@ BEGIN
     INSERT INTO mutexes (name) VALUES (mutex_name);
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, pg_temp;
-ALTER FUNCTION create_mutex(TEXT) OWNER TO pg_os_admin;
 
 
 -- lock mutex
@@ -48,7 +47,6 @@ BEGIN
     END IF;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, pg_temp;
-ALTER FUNCTION lock_mutex(INTEGER, TEXT) OWNER TO pg_os_admin;
 
 
 -- unlock mutex
@@ -72,7 +70,6 @@ BEGIN
     END IF;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, pg_temp;
-ALTER FUNCTION unlock_mutex(INTEGER, TEXT) OWNER TO pg_os_admin;
 
 
 -- create a semaphore
@@ -82,7 +79,6 @@ BEGIN
     VALUES (sem_name, initial_count, max_val);
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, pg_temp;
-ALTER FUNCTION create_semaphore(TEXT, INTEGER, INTEGER) OWNER TO pg_os_admin;
 
 
 -- acquire a semaphore. If count is 0, the process must wait
@@ -108,7 +104,6 @@ BEGIN
     END IF;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, pg_temp;
-ALTER FUNCTION acquire_semaphore(INTEGER, TEXT) OWNER TO pg_os_admin;
 
 
 -- release a semaphore. If processes are waiting for this semaphore, one can be moved to ready
@@ -141,6 +136,5 @@ BEGIN
     END IF;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, pg_temp;
-ALTER FUNCTION release_semaphore(INTEGER, TEXT) OWNER TO pg_os_admin;
 
 

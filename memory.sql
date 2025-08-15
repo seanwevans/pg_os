@@ -83,7 +83,6 @@ BEGIN
     END;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, pg_temp;
-ALTER FUNCTION allocate_memory(INTEGER, INTEGER, INTEGER) OWNER TO pg_os_admin;
  
 
 
@@ -111,7 +110,6 @@ BEGIN
     PERFORM log_memory_action(process_id, 'Memory freed: segment ' || segment_id, user_id, segment_id);
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, pg_temp;
-ALTER FUNCTION free_memory(INTEGER, INTEGER, INTEGER) OWNER TO pg_os_admin;
 
 -- allocate page to process
 CREATE OR REPLACE FUNCTION allocate_page(thread_id INTEGER) RETURNS BIGINT AS $$
@@ -141,4 +139,3 @@ BEGIN
     RETURN virtual_addr;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, pg_temp;
-ALTER FUNCTION allocate_page(INTEGER) OWNER TO pg_os_admin;

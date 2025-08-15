@@ -52,7 +52,6 @@ EXCEPTION
         RAISE EXCEPTION 'Could not create process: %', SQLERRM;
 END;
 $$;
-ALTER PROCEDURE create_process(TEXT, INTEGER, INTEGER) OWNER TO pg_os_admin;
 
 
 CREATE OR REPLACE PROCEDURE start_process(user_id INTEGER, process_id INTEGER)
@@ -80,7 +79,6 @@ EXCEPTION
         RAISE EXCEPTION 'Failed to start process %: %', process_id, SQLERRM;
 END;
 $$;
-ALTER PROCEDURE start_process(INTEGER, INTEGER) OWNER TO pg_os_admin;
 
 
 CREATE OR REPLACE PROCEDURE execute_process(user_id INTEGER, process_id INTEGER)
@@ -128,7 +126,6 @@ EXCEPTION
         RAISE EXCEPTION 'Failed to execute process %: %', process_id, SQLERRM;
 END;
 $$;
-ALTER PROCEDURE execute_process(INTEGER, INTEGER) OWNER TO pg_os_admin;
 
 
 
@@ -141,7 +138,6 @@ BEGIN
     RETURN QUERY SELECT * FROM processes WHERE state = state_filter;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, pg_temp;
-ALTER FUNCTION list_processes_by_state(TEXT) OWNER TO pg_os_admin;
 
 
 -- list all running or ready processes by priority
@@ -151,7 +147,6 @@ BEGIN
     RETURN QUERY SELECT * FROM processes WHERE state IN ('ready', 'running') ORDER BY priority DESC, created_at;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, pg_temp;
-ALTER FUNCTION list_ready_or_running_processes() OWNER TO pg_os_admin;
 
 
 CREATE OR REPLACE FUNCTION set_process_priority(user_id INTEGER, process_id INTEGER, new_priority INTEGER) RETURNS VOID AS $$
@@ -165,7 +160,6 @@ BEGIN
     WHERE id = process_id;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, pg_temp;
-ALTER FUNCTION set_process_priority(INTEGER, INTEGER, INTEGER) OWNER TO pg_os_admin;
 
 
 CREATE OR REPLACE FUNCTION terminate_process(user_id INTEGER, process_id INTEGER) RETURNS VOID AS $$
@@ -180,7 +174,6 @@ BEGIN
     WHERE id = process_id AND state != 'terminated';
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, pg_temp;
-ALTER FUNCTION terminate_process(INTEGER, INTEGER) OWNER TO pg_os_admin;
 
 
 -- log process
@@ -189,7 +182,6 @@ BEGIN
     INSERT INTO process_logs (process_id, action) VALUES (process_id, action);
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, pg_temp;
-ALTER FUNCTION log_process_action(INTEGER, TEXT) OWNER TO pg_os_admin;
 
 
 -- count states
@@ -199,7 +191,6 @@ BEGIN
     SELECT state, COUNT(*) FROM processes GROUP BY state;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, pg_temp;
-ALTER FUNCTION process_count_by_state() OWNER TO pg_os_admin;
 
 
 CREATE OR REPLACE FUNCTION pause_all_processes(user_id INTEGER) RETURNS VOID AS $$
@@ -213,7 +204,6 @@ BEGIN
     WHERE state IN ('ready', 'running');
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, pg_temp;
-ALTER FUNCTION pause_all_processes(INTEGER) OWNER TO pg_os_admin;
 
 
 CREATE OR REPLACE FUNCTION resume_all_waiting_processes(user_id INTEGER) RETURNS VOID AS $$
@@ -227,4 +217,3 @@ BEGIN
     WHERE state = 'waiting';
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, pg_temp;
-ALTER FUNCTION resume_all_waiting_processes(INTEGER) OWNER TO pg_os_admin;

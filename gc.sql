@@ -24,7 +24,6 @@ BEGIN
     END LOOP;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, pg_temp;
-ALTER FUNCTION cleanup_terminated_processes(INTERVAL) OWNER TO pg_os_admin;
 
 
 -- Helper function to free all memory for a terminated process
@@ -43,4 +42,3 @@ BEGIN
     END LOOP;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, pg_temp;
-ALTER FUNCTION free_all_memory_for_process(INTEGER) OWNER TO pg_os_admin;
