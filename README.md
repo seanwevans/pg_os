@@ -22,7 +22,8 @@ The extension bridges the gap between the database and the underlying OS, allowi
 
 ## Requirements
 - PostgreSQL 12+
-- PL/pgSQL language extension enabled
+- `plpgsql` extension installed (required)
+- Extension is not relocatable and will install into the database's default schema
 - Sufficient OS-level permissions for system interaction
 
 ## Installation
