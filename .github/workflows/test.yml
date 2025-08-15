@@ -12,7 +12,7 @@ jobs:
         run: |
           sudo apt-get update
           # Install the server, contrib modules and the development headers
-          sudo apt-get install -y postgresql postgresql-contrib libpq-dev
+          sudo apt-get install -y postgresql postgresql-contrib libpq-dev postgresql-server-dev-16
 
       - name: Start PostgreSQL
         run: |
