@@ -1,0 +1,44 @@
+-- tests for file versioning on repeated writes
+\set ECHO none
+SELECT create_user('writer') AS writer_id
+SELECT create_role('file_writer') AS role_id
+SELECT assign_role_to_user(1, 1);
+ assign_role_to_user
+---------------------
+
+(1 row)
+
+SELECT grant_permission_to_role(1, 'file', 'write');
+ grant_permission_to_role
+--------------------------
+
+(1 row)
+
+SELECT create_file(1, 'versioned.txt', NULL, FALSE) AS file_id
+ file_id
+---------
+       1
+(1 row)
+
+SELECT write_file(1, 1, 'first revision');
+ write_file
+------------
+
+(1 row)
+
+SELECT write_file(1, 1, 'second revision');
+ write_file
+------------
+
+(1 row)
+
+SELECT file_id, version_number, contents
+  FROM file_versions
+ WHERE file_id = 1
+ ORDER BY version_number;
+ file_id | version_number |     contents
+---------+----------------+-----------------
+       1 |              1 | 
+       1 |              2 | first revision
+(2 rows)
+
