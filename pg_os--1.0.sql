@@ -941,7 +941,9 @@ $$ LANGUAGE plpgsql;
 -- Unlock a file
 CREATE OR REPLACE FUNCTION unlock_file(user_id INTEGER, file_id INTEGER) RETURNS VOID AS $$
 BEGIN
-    DELETE FROM file_locks WHERE file_id=file_id AND locked_by_user=user_id;
+    DELETE FROM file_locks
+      WHERE file_id = unlock_file.file_id
+        AND locked_by_user = unlock_file.user_id;
 END;
 $$ LANGUAGE plpgsql;
 
