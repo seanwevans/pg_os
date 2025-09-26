@@ -461,7 +461,9 @@ CREATE OR REPLACE FUNCTION create_mutex(mutex_name TEXT) RETURNS VOID AS $$
 BEGIN
     INSERT INTO mutexes (name) VALUES (mutex_name);
 END;
-$$ LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, pg_temp;
+ALTER FUNCTION create_mutex(TEXT) OWNER TO pg_os_admin;
+GRANT EXECUTE ON FUNCTION create_mutex(TEXT) TO PUBLIC;
 
 
 -- lock mutex
@@ -482,7 +484,9 @@ BEGIN
         UPDATE threads SET state = 'waiting', waiting_on_mutex = mutex_name, updated_at = now() WHERE id = thread_id;
     END IF;
 END;
-$$ LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, pg_temp;
+ALTER FUNCTION lock_mutex(INTEGER, TEXT) OWNER TO pg_os_admin;
+GRANT EXECUTE ON FUNCTION lock_mutex(INTEGER, TEXT) TO PUBLIC;
 
 
 -- unlock mutex
@@ -505,7 +509,9 @@ BEGIN
         END IF;
     END IF;
 END;
-$$ LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, pg_temp;
+ALTER FUNCTION unlock_mutex(INTEGER, TEXT) OWNER TO pg_os_admin;
+GRANT EXECUTE ON FUNCTION unlock_mutex(INTEGER, TEXT) TO PUBLIC;
 
 
 -- create a semaphore
@@ -514,7 +520,9 @@ BEGIN
     INSERT INTO semaphores (name, count, max_count)
     VALUES (sem_name, initial_count, max_val);
 END;
-$$ LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, pg_temp;
+ALTER FUNCTION create_semaphore(TEXT, INTEGER, INTEGER) OWNER TO pg_os_admin;
+GRANT EXECUTE ON FUNCTION create_semaphore(TEXT, INTEGER, INTEGER) TO PUBLIC;
 
 
 -- acquire a semaphore. If count is 0, the process must wait
@@ -539,7 +547,9 @@ BEGIN
         PERFORM log_process_action(process_id, 'Waiting for semaphore: ' || sem_name);
     END IF;
 END;
-$$ LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, pg_temp;
+ALTER FUNCTION acquire_semaphore(INTEGER, TEXT) OWNER TO pg_os_admin;
+GRANT EXECUTE ON FUNCTION acquire_semaphore(INTEGER, TEXT) TO PUBLIC;
 
 
 -- release a semaphore. If processes are waiting for this semaphore, one can be moved to ready
@@ -571,7 +581,9 @@ BEGIN
         END IF;
     END IF;
 END;
-$$ LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, pg_temp;
+ALTER FUNCTION release_semaphore(INTEGER, TEXT) OWNER TO pg_os_admin;
+GRANT EXECUTE ON FUNCTION release_semaphore(INTEGER, TEXT) TO PUBLIC;
 
 
 -----------
@@ -742,15 +754,38 @@ DECLARE
     p RECORD;
     virtual_addr BIGINT;
 BEGIN
-    -- Find a free page
-    SELECT * INTO p FROM pages WHERE allocated=FALSE LIMIT 1;
+    -- Find a free page and lock it so concurrent allocators skip it.
+    SELECT *
+      INTO p
+      FROM pages
+     WHERE allocated = FALSE
+     LIMIT 1
+     FOR UPDATE SKIP LOCKED;
     IF NOT FOUND THEN
         RAISE EXCEPTION 'No free pages available';
     END IF;
 
-    virtual_addr := floor(random()*1000000)::BIGINT;
-    UPDATE pages SET allocated=TRUE, allocated_to_thread=thread_id WHERE id=p.id;
-    INSERT INTO page_tables (thread_id, page_id, virtual_address) VALUES (thread_id, p.id, virtual_addr);
+    LOOP
+        -- Use a monotonic sequence per thread to minimise contention.
+        SELECT COALESCE(MAX(virtual_address), 0) + 4096
+          INTO virtual_addr
+          FROM page_tables
+         WHERE page_tables.thread_id = allocate_page.thread_id;
+
+        BEGIN
+            INSERT INTO page_tables (thread_id, page_id, virtual_address)
+            VALUES (allocate_page.thread_id, p.id, virtual_addr);
+            EXIT;
+        EXCEPTION WHEN unique_violation THEN
+            -- Another allocator picked this address; retry with the next value.
+            CONTINUE;
+        END;
+    END LOOP;
+
+    UPDATE pages
+       SET allocated = TRUE,
+           allocated_to_thread = allocate_page.thread_id
+     WHERE id = p.id;
 
     RETURN virtual_addr;
 END;
@@ -794,9 +829,25 @@ CREATE TABLE IF NOT EXISTS file_versions (
 CREATE OR REPLACE FUNCTION create_file(user_id INTEGER, filename TEXT, parent_id INTEGER, is_dir BOOLEAN DEFAULT FALSE) RETURNS INTEGER AS $$
 DECLARE
     new_file_id INTEGER;
+    parent_record files%ROWTYPE;
 BEGIN
     IF NOT check_permission(user_id, 'file', 'write') THEN
         RAISE EXCEPTION 'User % does not have permission to create files', user_id;
+    END IF;
+
+    IF parent_id IS NOT NULL THEN
+        SELECT *
+          INTO parent_record
+          FROM files
+         WHERE id = parent_id;
+
+        IF NOT FOUND THEN
+            RAISE EXCEPTION 'Parent directory % does not exist', parent_id;
+        END IF;
+
+        IF NOT parent_record.is_directory THEN
+            RAISE EXCEPTION 'Parent % is not a directory', parent_id;
+        END IF;
     END IF;
 
     INSERT INTO files (name, parent_id, owner_user_id, permissions, is_directory)
@@ -942,7 +993,9 @@ $$ LANGUAGE plpgsql;
 -- Unlock a file
 CREATE OR REPLACE FUNCTION unlock_file(user_id INTEGER, file_id INTEGER) RETURNS VOID AS $$
 BEGIN
-    DELETE FROM file_locks WHERE file_id=file_id AND locked_by_user=user_id;
+    DELETE FROM file_locks
+      WHERE file_id = unlock_file.file_id
+        AND locked_by_user = unlock_file.user_id;
 END;
 $$ LANGUAGE plpgsql;
 
