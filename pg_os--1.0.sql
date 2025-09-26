@@ -817,9 +817,25 @@ CREATE TABLE IF NOT EXISTS file_versions (
 CREATE OR REPLACE FUNCTION create_file(user_id INTEGER, filename TEXT, parent_id INTEGER, is_dir BOOLEAN DEFAULT FALSE) RETURNS INTEGER AS $$
 DECLARE
     new_file_id INTEGER;
+    parent_record files%ROWTYPE;
 BEGIN
     IF NOT check_permission(user_id, 'file', 'write') THEN
         RAISE EXCEPTION 'User % does not have permission to create files', user_id;
+    END IF;
+
+    IF parent_id IS NOT NULL THEN
+        SELECT *
+          INTO parent_record
+          FROM files
+         WHERE id = parent_id;
+
+        IF NOT FOUND THEN
+            RAISE EXCEPTION 'Parent directory % does not exist', parent_id;
+        END IF;
+
+        IF NOT parent_record.is_directory THEN
+            RAISE EXCEPTION 'Parent % is not a directory', parent_id;
+        END IF;
     END IF;
 
     INSERT INTO files (name, parent_id, owner_user_id, permissions, is_directory)
