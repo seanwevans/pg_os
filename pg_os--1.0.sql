@@ -461,7 +461,9 @@ CREATE OR REPLACE FUNCTION create_mutex(mutex_name TEXT) RETURNS VOID AS $$
 BEGIN
     INSERT INTO mutexes (name) VALUES (mutex_name);
 END;
-$$ LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, pg_temp;
+ALTER FUNCTION create_mutex(TEXT) OWNER TO pg_os_admin;
+GRANT EXECUTE ON FUNCTION create_mutex(TEXT) TO PUBLIC;
 
 
 -- lock mutex
@@ -482,7 +484,9 @@ BEGIN
         UPDATE threads SET state = 'waiting', waiting_on_mutex = mutex_name, updated_at = now() WHERE id = thread_id;
     END IF;
 END;
-$$ LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, pg_temp;
+ALTER FUNCTION lock_mutex(INTEGER, TEXT) OWNER TO pg_os_admin;
+GRANT EXECUTE ON FUNCTION lock_mutex(INTEGER, TEXT) TO PUBLIC;
 
 
 -- unlock mutex
@@ -505,7 +509,9 @@ BEGIN
         END IF;
     END IF;
 END;
-$$ LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, pg_temp;
+ALTER FUNCTION unlock_mutex(INTEGER, TEXT) OWNER TO pg_os_admin;
+GRANT EXECUTE ON FUNCTION unlock_mutex(INTEGER, TEXT) TO PUBLIC;
 
 
 -- create a semaphore
@@ -514,7 +520,9 @@ BEGIN
     INSERT INTO semaphores (name, count, max_count)
     VALUES (sem_name, initial_count, max_val);
 END;
-$$ LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, pg_temp;
+ALTER FUNCTION create_semaphore(TEXT, INTEGER, INTEGER) OWNER TO pg_os_admin;
+GRANT EXECUTE ON FUNCTION create_semaphore(TEXT, INTEGER, INTEGER) TO PUBLIC;
 
 
 -- acquire a semaphore. If count is 0, the process must wait
@@ -539,7 +547,9 @@ BEGIN
         PERFORM log_process_action(process_id, 'Waiting for semaphore: ' || sem_name);
     END IF;
 END;
-$$ LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, pg_temp;
+ALTER FUNCTION acquire_semaphore(INTEGER, TEXT) OWNER TO pg_os_admin;
+GRANT EXECUTE ON FUNCTION acquire_semaphore(INTEGER, TEXT) TO PUBLIC;
 
 
 -- release a semaphore. If processes are waiting for this semaphore, one can be moved to ready
@@ -571,7 +581,9 @@ BEGIN
         END IF;
     END IF;
 END;
-$$ LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, pg_temp;
+ALTER FUNCTION release_semaphore(INTEGER, TEXT) OWNER TO pg_os_admin;
+GRANT EXECUTE ON FUNCTION release_semaphore(INTEGER, TEXT) TO PUBLIC;
 
 
 -----------

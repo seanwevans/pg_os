@@ -1,0 +1,50 @@
+\set ECHO none
+INSERT INTO mutexes (name) VALUES ('direct_mutex_attempt');
+ERROR:  permission denied for table mutexes
+SELECT create_mutex('limited_mutex') AS create_mutex_result;
+ create_mutex_result 
+---------------------
+ 
+(1 row)
+
+SELECT lock_mutex(1, 'limited_mutex') AS lock_mutex_result;
+ lock_mutex_result 
+-------------------
+ 
+(1 row)
+
+SELECT unlock_mutex(1, 'limited_mutex') AS unlock_mutex_result;
+ unlock_mutex_result 
+---------------------
+ 
+(1 row)
+
+SELECT create_semaphore('limited_sem', 1, 1) AS create_semaphore_result;
+ create_semaphore_result 
+-------------------------
+ 
+(1 row)
+
+SELECT acquire_semaphore(1, 'limited_sem') AS acquire_semaphore_result;
+ acquire_semaphore_result 
+---------------------------
+ 
+(1 row)
+
+SELECT release_semaphore(1, 'limited_sem') AS release_semaphore_result;
+ release_semaphore_result 
+---------------------------
+ 
+(1 row)
+
+SELECT name, locked_by_thread FROM mutexes WHERE name = 'limited_mutex';
+     name      | locked_by_thread 
+--------------+-------------------
+ limited_mutex | 
+(1 row)
+
+SELECT name, count FROM semaphores WHERE name = 'limited_sem';
+     name     | count 
+-------------+-------
+ limited_sem |     1
+(1 row)
