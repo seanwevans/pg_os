@@ -1,0 +1,35 @@
+-- regression tests for allocate_page
+\set ECHO none
+SELECT allocate_page(1) FROM generate_series(1, 10);
+ allocate_page 
+---------------
+          4096
+          8192
+         12288
+         16384
+         20480
+         24576
+         28672
+         32768
+         36864
+         40960
+(10 rows)
+
+SELECT virtual_address
+  FROM page_tables
+ WHERE thread_id = 1
+ ORDER BY virtual_address;
+ virtual_address 
+-----------------
+            4096
+            8192
+           12288
+           16384
+           20480
+           24576
+           28672
+           32768
+           36864
+           40960
+(10 rows)
+
