@@ -742,15 +742,38 @@ DECLARE
     p RECORD;
     virtual_addr BIGINT;
 BEGIN
-    -- Find a free page
-    SELECT * INTO p FROM pages WHERE allocated=FALSE LIMIT 1;
+    -- Find a free page and lock it so concurrent allocators skip it.
+    SELECT *
+      INTO p
+      FROM pages
+     WHERE allocated = FALSE
+     LIMIT 1
+     FOR UPDATE SKIP LOCKED;
     IF NOT FOUND THEN
         RAISE EXCEPTION 'No free pages available';
     END IF;
 
-    virtual_addr := floor(random()*1000000)::BIGINT;
-    UPDATE pages SET allocated=TRUE, allocated_to_thread=thread_id WHERE id=p.id;
-    INSERT INTO page_tables (thread_id, page_id, virtual_address) VALUES (thread_id, p.id, virtual_addr);
+    LOOP
+        -- Use a monotonic sequence per thread to minimise contention.
+        SELECT COALESCE(MAX(virtual_address), 0) + 4096
+          INTO virtual_addr
+          FROM page_tables
+         WHERE page_tables.thread_id = allocate_page.thread_id;
+
+        BEGIN
+            INSERT INTO page_tables (thread_id, page_id, virtual_address)
+            VALUES (allocate_page.thread_id, p.id, virtual_addr);
+            EXIT;
+        EXCEPTION WHEN unique_violation THEN
+            -- Another allocator picked this address; retry with the next value.
+            CONTINUE;
+        END;
+    END LOOP;
+
+    UPDATE pages
+       SET allocated = TRUE,
+           allocated_to_thread = allocate_page.thread_id
+     WHERE id = p.id;
 
     RETURN virtual_addr;
 END;
