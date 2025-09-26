@@ -1,0 +1,4 @@
+-- tests for create_file parent validation
+\set ECHO none
+SELECT create_file(1, 'child', 1, FALSE);
+ERROR:  Parent 1 is not a directory

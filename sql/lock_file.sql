@@ -19,8 +19,15 @@ INSERT INTO user_roles (user_id, role_id) VALUES (1, 1);
 -- successful lock
 SELECT lock_file(1, 1, 'read');
 
+-- ensure multiple locks can coexist
+SELECT lock_file(1, 2, 'read');
+
 \set ON_ERROR_STOP off
 SELECT lock_file(1, 1, 'read');
 SELECT lock_file(1, 999, 'read');
 SELECT lock_file(1, 2, 'bad');
 \set ON_ERROR_STOP on
+
+-- unlock one file and ensure other lock remains
+SELECT unlock_file(1, 1);
+SELECT file_id, locked_by_user, lock_mode FROM file_locks ORDER BY file_id;
