@@ -1,17 +1,35 @@
 \set ECHO none
 SELECT lock_file(1, 1, 'read');
- lock_file 
+ lock_file
 -----------
- 
+
+(1 row)
+
+SELECT lock_file(1, 2, 'read');
+ lock_file
+-----------
+
 (1 row)
 
 SELECT lock_file(1, 1, 'read');
- lock_file 
+ lock_file
 -----------
- 
+
 (1 row)
 
 SELECT lock_file(1, 999, 'read');
 ERROR:  File not found
 SELECT lock_file(1, 2, 'bad');
 ERROR:  new row for relation "file_locks" violates check constraint "file_locks_lock_mode_check"
+
+SELECT unlock_file(1, 1);
+ unlock_file
+------------
+
+(1 row)
+
+SELECT file_id, locked_by_user, lock_mode FROM file_locks ORDER BY file_id;
+ file_id | locked_by_user | lock_mode 
+---------+----------------+-----------
+       2 |              1 | read
+(1 row)
