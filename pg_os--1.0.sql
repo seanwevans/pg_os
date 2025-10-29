@@ -2,6 +2,15 @@
 -----------------------------
 
 
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'pg_os_admin') THEN
+        CREATE ROLE pg_os_admin;
+    END IF;
+END;
+$$;
+
+
 -- users
 CREATE TABLE IF NOT EXISTS users (
     id SERIAL PRIMARY KEY,
