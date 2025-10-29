@@ -685,37 +685,68 @@ $$ LANGUAGE plpgsql;
 -- Similarly, for memory allocation, use transactions and more verbose errors
 CREATE OR REPLACE FUNCTION allocate_memory(user_id INTEGER, process_id INTEGER, segment_size INTEGER) RETURNS VOID AS $$
 DECLARE
-    mem_seg RECORD;
+    mem_seg memory_segments%ROWTYPE;
+    updated_seg memory_segments%ROWTYPE;
+    locked BOOLEAN := FALSE;
 BEGIN
     IF NOT check_permission(user_id, 'memory', 'allocate') THEN
         RAISE EXCEPTION 'User % does not have permission to allocate memory', user_id;
     END IF;
 
     BEGIN
-        SELECT * INTO mem_seg FROM memory_segments
-        WHERE allocated = FALSE AND size >= segment_size
-        ORDER BY size
-        LIMIT 1;
+        PERFORM pg_advisory_lock(1);  -- simulate locking, ensure no other transaction interferes
+        locked := TRUE;
 
-        IF NOT FOUND THEN
-            RAISE EXCEPTION 'No suitable memory segment available of size %', segment_size;
+        LOOP
+            SELECT *
+              INTO mem_seg
+              FROM memory_segments
+             WHERE allocated = FALSE AND size >= segment_size
+             ORDER BY size
+             LIMIT 1
+             FOR UPDATE SKIP LOCKED;
+
+            IF NOT FOUND THEN
+                IF locked THEN
+                    PERFORM pg_advisory_unlock(1);
+                    locked := FALSE;
+                END IF;
+                RAISE EXCEPTION 'No suitable memory segment available of size %', segment_size;
+            END IF;
+
+            UPDATE memory_segments
+               SET allocated = TRUE,
+                   allocated_to = process_id
+             WHERE id = mem_seg.id
+               AND allocated = FALSE
+             RETURNING * INTO updated_seg;
+
+            IF FOUND THEN
+                EXIT;
+            END IF;
+
+            IF locked THEN
+                PERFORM pg_advisory_unlock(1);
+                locked := FALSE;
+            END IF;
+            RAISE EXCEPTION 'Memory segment % was allocated concurrently', mem_seg.id;
+        END LOOP;
+
+        INSERT INTO process_memory (process_id, segment_id) VALUES (process_id, updated_seg.id);
+
+        IF locked THEN
+            PERFORM pg_advisory_unlock(1);
+            locked := FALSE;
         END IF;
 
-        -- Transaction block for atomic allocation
-        BEGIN
-            PERFORM pg_advisory_lock(1);  -- simulate locking, ensure no other transaction interferes
-            UPDATE memory_segments SET allocated = TRUE, allocated_to = process_id WHERE id = mem_seg.id;
-            INSERT INTO process_memory (process_id, segment_id) VALUES (process_id, mem_seg.id);
-            PERFORM pg_advisory_unlock(1);
-        EXCEPTION WHEN others THEN
-            PERFORM pg_advisory_unlock(1);
-            RAISE;
-        END;
-
         -- Log the allocation
-        PERFORM log_memory_action(process_id, 'Memory allocated: segment ' || mem_seg.id, user_id, mem_seg.id);
+        PERFORM log_memory_action(process_id, 'Memory allocated: segment ' || updated_seg.id, user_id, updated_seg.id);
 
     EXCEPTION WHEN others THEN
+        IF locked THEN
+            PERFORM pg_advisory_unlock(1);
+            locked := FALSE;
+        END IF;
         RAISE EXCEPTION 'Error allocating memory: %', SQLERRM;
     END;
 END;
