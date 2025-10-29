@@ -528,17 +528,24 @@ GRANT EXECUTE ON FUNCTION create_semaphore(TEXT, INTEGER, INTEGER) TO PUBLIC;
 -- acquire a semaphore. If count is 0, the process must wait
 CREATE OR REPLACE FUNCTION acquire_semaphore(process_id INTEGER, sem_name TEXT) RETURNS VOID AS $$
 DECLARE
-    sem RECORD;
+    acquired_sem_id INTEGER;
 BEGIN
-    SELECT * INTO sem FROM semaphores WHERE name = sem_name;
+    -- Ensure the semaphore exists before attempting acquisition
+    PERFORM 1 FROM semaphores WHERE name = sem_name;
 
     IF NOT FOUND THEN
         RAISE EXCEPTION 'Semaphore % not found', sem_name;
     END IF;
 
-    IF sem.count > 0 THEN
+    -- Attempt to atomically decrement the semaphore count.
+    UPDATE semaphores
+       SET count = count - 1
+     WHERE name = sem_name
+       AND count > 0
+     RETURNING id INTO acquired_sem_id;
+
+    IF FOUND THEN
         -- Acquire the semaphore immediately
-        UPDATE semaphores SET count = count - 1 WHERE name = sem_name;
         UPDATE processes SET waiting_on_semaphore = NULL WHERE id = process_id;
         PERFORM log_process_action(process_id, 'Semaphore acquired: ' || sem_name);
     ELSE
