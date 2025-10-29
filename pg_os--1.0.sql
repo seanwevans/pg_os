@@ -777,6 +777,8 @@ $$ LANGUAGE plpgsql;
 
 -- Free memory from a process
 CREATE OR REPLACE FUNCTION free_memory(user_id INTEGER, process_id INTEGER, segment_id INTEGER) RETURNS VOID AS $$
+DECLARE
+    segment_missing BOOLEAN := FALSE;
 BEGIN
     IF NOT check_permission(user_id, 'memory', 'allocate') THEN
         RAISE EXCEPTION 'User % does not have permission to free memory', user_id;
@@ -784,18 +786,32 @@ BEGIN
     BEGIN
         PERFORM pg_advisory_lock(1);
 
-        DELETE FROM process_memory
-            WHERE process_id = free_memory.process_id
-              AND segment_id = free_memory.segment_id;
-        UPDATE memory_segments
-            SET allocated = FALSE, allocated_to = NULL
-            WHERE id = free_memory.segment_id;
+        PERFORM 1
+            FROM memory_segments
+           WHERE id = free_memory.segment_id
+             AND allocated_to = free_memory.process_id
+           FOR UPDATE;
+
+        IF NOT FOUND THEN
+            segment_missing := TRUE;
+        ELSE
+            DELETE FROM process_memory
+                WHERE process_id = free_memory.process_id
+                  AND segment_id = free_memory.segment_id;
+            UPDATE memory_segments
+                SET allocated = FALSE, allocated_to = NULL
+                WHERE id = free_memory.segment_id;
+        END IF;
 
         PERFORM pg_advisory_unlock(1);
     EXCEPTION WHEN others THEN
         PERFORM pg_advisory_unlock(1);
         RAISE;
     END;
+
+    IF segment_missing THEN
+        RAISE EXCEPTION 'Memory segment % is not allocated to process %', segment_id, process_id;
+    END IF;
     PERFORM log_memory_action(process_id, 'Memory freed: segment ' || segment_id, user_id, segment_id);
 END;
 $$ LANGUAGE plpgsql;
