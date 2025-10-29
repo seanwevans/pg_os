@@ -480,18 +480,23 @@ CREATE OR REPLACE FUNCTION lock_mutex(thread_id INTEGER, mutex_name TEXT) RETURN
 DECLARE
     m RECORD;
 BEGIN
-    SELECT * INTO m FROM mutexes WHERE name = mutex_name;
+    SELECT * INTO m FROM mutexes WHERE name = mutex_name FOR UPDATE;
     IF NOT FOUND THEN
         RAISE EXCEPTION 'Mutex % not found', mutex_name;
     END IF;
 
     IF m.locked_by_thread IS NULL THEN
-        UPDATE mutexes SET locked_by_thread = thread_id WHERE id = m.id;
-        UPDATE threads SET waiting_on_mutex = NULL WHERE id = thread_id;
-    ELSE
-        -- Thread must wait
-        UPDATE threads SET state = 'waiting', waiting_on_mutex = mutex_name, updated_at = now() WHERE id = thread_id;
+        UPDATE mutexes
+            SET locked_by_thread = thread_id
+            WHERE id = m.id AND locked_by_thread IS NULL;
+        IF FOUND THEN
+            UPDATE threads SET waiting_on_mutex = NULL WHERE id = thread_id;
+            RETURN;
+        END IF;
     END IF;
+
+    -- Thread must wait
+    UPDATE threads SET state = 'waiting', waiting_on_mutex = mutex_name, updated_at = now() WHERE id = thread_id;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, pg_temp;
 ALTER FUNCTION lock_mutex(INTEGER, TEXT) OWNER TO pg_os_admin;
