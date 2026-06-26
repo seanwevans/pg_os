@@ -462,7 +462,9 @@ CREATE TABLE IF NOT EXISTS semaphores (
     id SERIAL PRIMARY KEY,
     name TEXT UNIQUE NOT NULL,
     count INTEGER NOT NULL CHECK (count >= 0),
-    max_count INTEGER NOT NULL CHECK (max_count >= 1)
+    max_count INTEGER NOT NULL CHECK (max_count >= 1),
+    -- a semaphore can never hold more permits than its maximum
+    CHECK (count <= max_count)
 );
 
 
@@ -533,6 +535,13 @@ GRANT EXECUTE ON FUNCTION unlock_mutex(INTEGER, TEXT) TO PUBLIC;
 -- create a semaphore
 CREATE OR REPLACE FUNCTION create_semaphore(sem_name TEXT, initial_count INTEGER, max_val INTEGER) RETURNS VOID AS $$
 BEGIN
+    IF max_val < 1 THEN
+        RAISE EXCEPTION 'Semaphore maximum must be at least 1 (got %)', max_val;
+    END IF;
+    IF initial_count < 0 OR initial_count > max_val THEN
+        RAISE EXCEPTION 'Semaphore initial count % must be between 0 and the maximum %', initial_count, max_val;
+    END IF;
+
     INSERT INTO semaphores (name, count, max_count)
     VALUES (sem_name, initial_count, max_val);
 END;

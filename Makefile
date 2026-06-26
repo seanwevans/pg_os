@@ -14,6 +14,7 @@ REGRESS = pg_os_basic \
           load_unload_module \
           modules \
           locks_security \
+          semaphore_validation
           schema_install
 REGRESS_OPTS = --outputdir=$(CURDIR)/tmp_pg_os_regress
 PGXS := $(shell $(PG_CONFIG) --pgxs)
