@@ -1,0 +1,22 @@
+-- tests for set_power_state
+\set ECHO none
+SELECT set_power_state('suspended');
+ set_power_state 
+-----------------
+ 
+(1 row)
+
+SELECT state FROM power_states ORDER BY id DESC LIMIT 1;
+   state   
+-----------
+ suspended
+(1 row)
+
+SELECT set_power_state('banana');
+ERROR:  Invalid power state
+SELECT count(*) AS recorded_states FROM power_states;
+ recorded_states 
+-----------------
+               1
+(1 row)
+

@@ -1,0 +1,79 @@
+-- tests for send_signal / handle_signals
+\set ECHO none
+SELECT create_user('signaler') AS uid 
+SELECT create_role('sig_role') AS rid 
+SELECT assign_role_to_user(1, 1);
+ assign_role_to_user 
+---------------------
+ 
+(1 row)
+
+SELECT grant_permission_to_role(1, 'process', 'execute');
+ grant_permission_to_role 
+--------------------------
+ 
+(1 row)
+
+INSERT INTO processes (name, state, owner_user_id)
+VALUES ('sig_proc', 'running', 1)
+RETURNING id AS pid 
+SELECT send_signal(1, 'SIGSTOP');
+ send_signal 
+-------------
+ 
+(1 row)
+
+SELECT handle_signals(1, 1);
+ handle_signals 
+----------------
+ 
+(1 row)
+
+SELECT state FROM processes WHERE id = 1;
+  state  
+---------
+ waiting
+(1 row)
+
+SELECT send_signal(1, 'SIGCONT');
+ send_signal 
+-------------
+ 
+(1 row)
+
+SELECT handle_signals(1, 1);
+ handle_signals 
+----------------
+ 
+(1 row)
+
+SELECT state FROM processes WHERE id = 1;
+ state 
+-------
+ ready
+(1 row)
+
+SELECT send_signal(1, 'SIGTERM');
+ send_signal 
+-------------
+ 
+(1 row)
+
+SELECT handle_signals(1, 1);
+ handle_signals 
+----------------
+ 
+(1 row)
+
+SELECT state FROM processes WHERE id = 1;
+   state    
+------------
+ terminated
+(1 row)
+
+SELECT count(*) AS remaining_signals FROM signals WHERE process_id = 1;
+ remaining_signals 
+-------------------
+                 0
+(1 row)
+

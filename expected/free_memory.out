@@ -1,0 +1,58 @@
+-- tests for free_memory (single-segment release)
+\set ECHO none
+SELECT create_user('mem_user') AS uid 
+SELECT create_role('mem_role') AS rid 
+SELECT assign_role_to_user(1, 1);
+ assign_role_to_user 
+---------------------
+ 
+(1 row)
+
+SELECT grant_permission_to_role(1, 'memory', 'allocate');
+ grant_permission_to_role 
+--------------------------
+ 
+(1 row)
+
+INSERT INTO processes (name, state, owner_user_id)
+VALUES ('mem_proc', 'running', 1)
+RETURNING id AS pid 
+INSERT INTO memory_segments (size) VALUES (2048);
+SELECT allocate_memory(1, 1, 1024);
+ allocate_memory 
+-----------------
+ 
+(1 row)
+
+SELECT allocated, allocated_to FROM memory_segments ORDER BY id;
+ allocated | allocated_to 
+-----------+--------------
+ t         |            1
+(1 row)
+
+SELECT process_id, segment_id FROM process_memory;
+ process_id | segment_id 
+------------+------------
+          1 |          1
+(1 row)
+
+SELECT free_memory(1, 1, 1);
+ free_memory 
+-------------
+ 
+(1 row)
+
+SELECT allocated, allocated_to FROM memory_segments ORDER BY id;
+ allocated | allocated_to 
+-----------+--------------
+ f         |             
+(1 row)
+
+SELECT count(*) AS process_memory_rows FROM process_memory;
+ process_memory_rows 
+---------------------
+                   0
+(1 row)
+
+SELECT free_memory(1, 1, 1);
+ERROR:  Memory segment 1 is not allocated to process 1

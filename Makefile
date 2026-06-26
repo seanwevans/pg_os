@@ -13,6 +13,12 @@ REGRESS = pg_os_basic \
           lock_file \
           load_unload_module \
           modules \
+          free_memory \
+          signals \
+          ipc \
+          semaphore_wait \
+          scheduler \
+          power \
           locks_security
 REGRESS_OPTS = --outputdir=$(CURDIR)/tmp_pg_os_regress
 PGXS := $(shell $(PG_CONFIG) --pgxs)
