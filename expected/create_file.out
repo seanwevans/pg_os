@@ -1,4 +1,11 @@
 -- tests for create_file parent validation
 \set ECHO none
+INSERT INTO users (username) VALUES ('alice');
+INSERT INTO roles (role_name) VALUES ('file_writer');
+INSERT INTO permissions (role_id, resource_type, action)
+VALUES (1, 'file', 'write');
+INSERT INTO user_roles (user_id, role_id) VALUES (1, 1);
+INSERT INTO files (id, name, owner_user_id, permissions, is_directory)
+VALUES (1, 'not_a_directory', 1, 'rwxr-----', false);
 SELECT create_file(1, 'child', 1, FALSE);
 ERROR:  Parent 1 is not a directory

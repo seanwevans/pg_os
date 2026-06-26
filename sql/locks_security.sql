@@ -1,8 +1,8 @@
 \set ECHO none
 SET client_min_messages TO warning;
 DROP EXTENSION IF EXISTS pg_os CASCADE;
-DROP ROLE IF EXISTS pg_os_limited;
-CREATE ROLE pg_os_limited LOGIN;
+DROP ROLE IF EXISTS pgos_limited;
+CREATE ROLE pgos_limited LOGIN;
 CREATE EXTENSION pg_os;
 \set ECHO queries
 \set VERBOSITY terse
@@ -20,7 +20,7 @@ INSERT INTO threads (process_id, name, state, priority)
 VALUES (:'process_id', 'security_thread', 'ready', 1)
 RETURNING id AS thread_id \gset
 
-SET ROLE pg_os_limited;
+SET ROLE pgos_limited;
 
 -- Direct table access should fail for the limited role
 \set ON_ERROR_STOP off
@@ -41,4 +41,4 @@ RESET ROLE;
 SELECT name, locked_by_thread FROM mutexes WHERE name = 'limited_mutex';
 SELECT name, count FROM semaphores WHERE name = 'limited_sem';
 
-DROP ROLE pg_os_limited;
+DROP ROLE pgos_limited;

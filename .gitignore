@@ -13,6 +13,9 @@
 # Regression test outputs
 /results/
 /tmp_check/
+/tmp_pg_os_regress/
+regression.diffs
+regression.out
 
 # Backup and temp files
 *~
