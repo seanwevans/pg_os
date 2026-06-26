@@ -1,0 +1,75 @@
+-- The extension must work when installed into a non-default schema and called
+-- WITHOUT that schema on the search_path. Every function pins its own
+-- search_path to @extschema@, so qualified calls resolve their tables.
+\set ECHO none
+SELECT pgos_ext.create_user('alice') AS uid 
+SELECT pgos_ext.create_role('ops') AS rid 
+SELECT pgos_ext.assign_role_to_user(1, 1);
+ assign_role_to_user 
+---------------------
+ 
+(1 row)
+
+SELECT pgos_ext.grant_permission_to_role(1, 'process', 'execute');
+ grant_permission_to_role 
+--------------------------
+ 
+(1 row)
+
+SELECT pgos_ext.grant_permission_to_role(1, 'memory', 'allocate');
+ grant_permission_to_role 
+--------------------------
+ 
+(1 row)
+
+SELECT pgos_ext.grant_permission_to_role(1, 'file', 'write');
+ grant_permission_to_role 
+--------------------------
+ 
+(1 row)
+
+CALL pgos_ext.create_process('p1', 1, 1);
+SELECT name, state FROM pgos_ext.processes ORDER BY name;
+ name | state 
+------+-------
+ p1   | new
+(1 row)
+
+INSERT INTO pgos_ext.memory_segments (size) VALUES (4096);
+SELECT pgos_ext.allocate_memory(1, 1, 1024);
+ allocate_memory 
+-----------------
+ 
+(1 row)
+
+SELECT allocated, allocated_to FROM pgos_ext.memory_segments ORDER BY id;
+ allocated | allocated_to 
+-----------+--------------
+ t         |            1
+(1 row)
+
+SELECT pgos_ext.create_file(1, 'f.txt', NULL, FALSE) AS fid 
+SELECT pgos_ext.write_file(1, 1, 'hi');
+ write_file 
+------------
+ 
+(1 row)
+
+SELECT pgos_ext.read_file(1, 1);
+ read_file 
+-----------
+ hi
+(1 row)
+
+SELECT pgos_ext.create_mutex('m');
+ create_mutex 
+--------------
+ 
+(1 row)
+
+SELECT name, locked_by_thread FROM pgos_ext.mutexes;
+ name | locked_by_thread 
+------+------------------
+ m    |                 
+(1 row)
+
