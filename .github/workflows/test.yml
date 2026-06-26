@@ -4,6 +4,9 @@ on:
   push:
   pull_request:
 
+env:
+  PG_MAJOR: "16"
+
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -13,30 +16,42 @@ jobs:
       - name: Install PostgreSQL and development headers
         run: |
           sudo apt-get update
-          # Server, contrib modules, client library and the PGXS build headers
-          sudo apt-get install -y postgresql postgresql-contrib libpq-dev postgresql-server-dev-all
+          # The GitHub runner image already has the PGDG apt repo and a newer
+          # postgresql-common, which conflicts with the archive's
+          # postgresql-server-dev-all meta-package. Install versioned packages
+          # so apt stays on the PGDG line.
+          sudo apt-get install -y \
+            "postgresql-${PG_MAJOR}" \
+            "postgresql-server-dev-${PG_MAJOR}" \
+            libpq-dev
 
-      - name: Start PostgreSQL
+      - name: Start the PostgreSQL cluster
         run: |
-          # Determine the installed major version and start the default cluster
-          PG_MAJOR=$(pg_config --version | awk '{print $2}' | cut -d. -f1)
-          echo "PG_MAJOR=$PG_MAJOR" >> "$GITHUB_ENV"
-          sudo pg_ctlcluster "$PG_MAJOR" main start
+          # The cluster may already exist on the runner; create it only if not.
+          if ! pg_lsclusters -h | awk '{print $1, $2}' | grep -qx "${PG_MAJOR} main"; then
+            sudo pg_createcluster "${PG_MAJOR}" main
+          fi
+          sudo pg_ctlcluster "${PG_MAJOR}" main start || true
+          # Whatever port the cluster ended up on, route all later steps to it.
+          PORT=$(pg_lsclusters -h | awk -v v="${PG_MAJOR}" '$1==v && $2=="main" {print $3}')
+          echo "PGHOST=/var/run/postgresql" >> "$GITHUB_ENV"
+          echo "PGPORT=$PORT" >> "$GITHUB_ENV"
 
       - name: Create a superuser role for the runner
         run: |
           # pg_regress connects over the local socket as the current OS user via
           # peer authentication, so that user needs a matching superuser role.
-          sudo -u postgres createuser --superuser "$(whoami)"
-          sudo -u postgres createdb "$(whoami)"
+          sudo -u postgres psql -p "$PGPORT" -d postgres \
+            -c "CREATE ROLE \"$(whoami)\" SUPERUSER LOGIN;" || true
+          sudo -u postgres createdb -p "$PGPORT" -O "$(whoami)" "$(whoami)" || true
 
       - name: Build and install the extension
         run: |
-          make
-          sudo make install
+          make PG_CONFIG="/usr/lib/postgresql/${PG_MAJOR}/bin/pg_config"
+          sudo make PG_CONFIG="/usr/lib/postgresql/${PG_MAJOR}/bin/pg_config" install
 
       - name: Run regression tests
-        run: make installcheck
+        run: make PG_CONFIG="/usr/lib/postgresql/${PG_MAJOR}/bin/pg_config" installcheck
 
       - name: Show regression diffs on failure
         if: failure()
