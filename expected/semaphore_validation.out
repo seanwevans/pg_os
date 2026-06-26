@@ -1,0 +1,27 @@
+-- create_semaphore must reject parameters that would violate the
+-- "0 <= count <= max_count, max_count >= 1" invariant.
+\set ECHO none
+SELECT create_semaphore('ok', 1, 2);
+ create_semaphore 
+------------------
+ 
+(1 row)
+
+SELECT name, count, max_count FROM semaphores WHERE name = 'ok';
+ name | count | max_count 
+------+-------+-----------
+ ok   |     1 |         2
+(1 row)
+
+SELECT create_semaphore('too_many', 5, 1);
+ERROR:  Semaphore initial count 5 must be between 0 and the maximum 1
+SELECT create_semaphore('negative', -1, 2);
+ERROR:  Semaphore initial count -1 must be between 0 and the maximum 2
+SELECT create_semaphore('no_max', 0, 0);
+ERROR:  Semaphore maximum must be at least 1 (got 0)
+SELECT count(*) AS semaphore_count FROM semaphores;
+ semaphore_count 
+-----------------
+               1
+(1 row)
+
