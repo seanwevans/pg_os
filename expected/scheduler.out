@@ -1,0 +1,52 @@
+-- tests for the process and thread schedulers
+\set ECHO none
+SELECT create_user('sched_user') AS uid 
+SELECT create_role('sched_role') AS rid 
+SELECT assign_role_to_user(1, 1);
+ assign_role_to_user 
+---------------------
+ 
+(1 row)
+
+SELECT grant_permission_to_role(1, 'process', 'execute');
+ grant_permission_to_role 
+--------------------------
+ 
+(1 row)
+
+INSERT INTO processes (name, state, priority, owner_user_id)
+VALUES ('sched_proc', 'ready', 5, 1)
+RETURNING id AS pid 
+SELECT schedule_processes(1);
+ schedule_processes 
+--------------------
+ 
+(1 row)
+
+SELECT state FROM processes WHERE id = 1;
+   state    
+------------
+ terminated
+(1 row)
+
+INSERT INTO threads (process_id, name, state)
+VALUES (1, 'sched_thread', 'ready')
+RETURNING id AS tid 
+SELECT schedule_threads();
+ schedule_threads 
+------------------
+ 
+(1 row)
+
+SELECT state FROM threads WHERE id = 1;
+   state    
+------------
+ terminated
+(1 row)
+
+SELECT count(*) AS ready_threads FROM threads WHERE state = 'ready';
+ ready_threads 
+---------------
+             0
+(1 row)
+

@@ -1,0 +1,79 @@
+-- tests for IPC channels and the user mailbox
+\set ECHO none
+SELECT create_user('producer') AS prod 
+SELECT create_user('consumer') AS cons 
+SELECT create_role('ipc_role') AS rid 
+SELECT assign_role_to_user(1, 1);
+ assign_role_to_user 
+---------------------
+ 
+(1 row)
+
+SELECT assign_role_to_user(2, 1);
+ assign_role_to_user 
+---------------------
+ 
+(1 row)
+
+SELECT grant_permission_to_role(1, 'resource', 'read');
+ grant_permission_to_role 
+--------------------------
+ 
+(1 row)
+
+SELECT grant_permission_to_role(1, 'resource', 'write');
+ grant_permission_to_role 
+--------------------------
+ 
+(1 row)
+
+SELECT grant_permission_to_role(1, 'file', 'read');
+ grant_permission_to_role 
+--------------------------
+ 
+(1 row)
+
+SELECT grant_permission_to_role(1, 'file', 'write');
+ grant_permission_to_role 
+--------------------------
+ 
+(1 row)
+
+SELECT register_channel(1, 'chan1');
+ register_channel 
+------------------
+ 
+(1 row)
+
+SELECT write_channel(1, 'chan1', NULL, 'ping');
+ write_channel 
+---------------
+ 
+(1 row)
+
+SELECT read_channel(2, 'chan1');
+ read_channel 
+--------------
+ ping
+(1 row)
+
+SELECT count(*) AS messages_left FROM channel_messages;
+ messages_left 
+---------------
+             0
+(1 row)
+
+SELECT send_mail(1, 2, 'hello consumer');
+ send_mail 
+-----------
+ 
+(1 row)
+
+SELECT check_mail(2);
+   check_mail   
+----------------
+ hello consumer
+(1 row)
+
+SELECT write_channel(1, 'nope', NULL, 'x');
+ERROR:  Channel not found

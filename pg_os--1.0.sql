@@ -74,7 +74,7 @@ BEGIN
     INSERT INTO users (username) VALUES (name) RETURNING id INTO new_user_id;
     RETURN new_user_id;
 END;
-$$ LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql SET search_path = @extschema@, pg_temp;
 
 
 -- create a role
@@ -85,7 +85,7 @@ BEGIN
     INSERT INTO roles (role_name) VALUES (role_name) RETURNING id INTO new_role_id;
     RETURN new_role_id;
 END;
-$$ LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql SET search_path = @extschema@, pg_temp;
 
 
 -- Assign a role to a user
@@ -93,7 +93,7 @@ CREATE OR REPLACE FUNCTION assign_role_to_user(user_id INTEGER, role_id INTEGER)
 BEGIN
     INSERT INTO user_roles (user_id, role_id) VALUES (user_id, role_id);
 END;
-$$ LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql SET search_path = @extschema@, pg_temp;
 
 
 -- Grant permission to a role
@@ -101,7 +101,7 @@ CREATE OR REPLACE FUNCTION grant_permission_to_role(role_id INTEGER, resource_ty
 BEGIN
     INSERT INTO permissions (role_id, resource_type, action) VALUES (role_id, resource_type, action);
 END;
-$$ LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql SET search_path = @extschema@, pg_temp;
 
 
 -- check permissions
@@ -133,7 +133,7 @@ BEGIN
 
     RETURN COALESCE(allowed, FALSE);
 END;
-$$ LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql SET search_path = @extschema@, pg_temp;
 -------------
 -- PROCESSES
 -------------
@@ -164,7 +164,7 @@ CREATE OR REPLACE FUNCTION log_process_action(process_id INTEGER, action TEXT) R
 BEGIN
     INSERT INTO process_logs (process_id, action) VALUES (process_id, action);
 END;
-$$ LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql SET search_path = @extschema@, pg_temp;
 
 -- create a process (caller manages transactions; errors handled via subtransaction)
 CREATE OR REPLACE PROCEDURE create_process(
@@ -172,7 +172,7 @@ CREATE OR REPLACE PROCEDURE create_process(
     owner_id INTEGER,
     process_priority INTEGER DEFAULT 1
 )
-LANGUAGE plpgsql
+LANGUAGE plpgsql SET search_path = @extschema@, pg_temp
 AS $$
 BEGIN
     -- Permission check
@@ -193,7 +193,7 @@ $$;
 
 
 CREATE OR REPLACE PROCEDURE start_process(user_id INTEGER, process_id INTEGER)
-LANGUAGE plpgsql
+LANGUAGE plpgsql SET search_path = @extschema@, pg_temp
 AS $$
 BEGIN
     -- Permission check
@@ -218,7 +218,7 @@ $$;
 
 
 CREATE OR REPLACE PROCEDURE execute_process(user_id INTEGER, process_id INTEGER)
-LANGUAGE plpgsql
+LANGUAGE plpgsql SET search_path = @extschema@, pg_temp
 AS $$
 BEGIN
     -- Permission check
@@ -264,7 +264,7 @@ RETURNS SETOF processes AS $$
 BEGIN
     RETURN QUERY SELECT * FROM processes WHERE state = state_filter;
 END;
-$$ LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql SET search_path = @extschema@, pg_temp;
 
 
 -- list all running or ready processes by priority
@@ -273,7 +273,7 @@ RETURNS SETOF processes AS $$
 BEGIN
     RETURN QUERY SELECT * FROM processes WHERE state IN ('ready', 'running') ORDER BY priority DESC, created_at;
 END;
-$$ LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql SET search_path = @extschema@, pg_temp;
 
 
 CREATE OR REPLACE FUNCTION set_process_priority(user_id INTEGER, process_id INTEGER, new_priority INTEGER) RETURNS VOID AS $$
@@ -286,7 +286,7 @@ BEGIN
     UPDATE processes SET priority = new_priority, updated_at = now()
     WHERE id = process_id;
 END;
-$$ LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql SET search_path = @extschema@, pg_temp;
 
 
 CREATE OR REPLACE FUNCTION terminate_process(user_id INTEGER, process_id INTEGER) RETURNS VOID AS $$
@@ -300,7 +300,7 @@ BEGIN
     SET state = 'terminated', updated_at = now()
     WHERE id = process_id AND state != 'terminated';
 END;
-$$ LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql SET search_path = @extschema@, pg_temp;
 
 
 -- count states
@@ -309,7 +309,7 @@ BEGIN
     RETURN QUERY
     SELECT processes.state, COUNT(*)::INTEGER FROM processes GROUP BY processes.state;
 END;
-$$ LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql SET search_path = @extschema@, pg_temp;
 
 
 CREATE OR REPLACE FUNCTION pause_all_processes(user_id INTEGER) RETURNS VOID AS $$
@@ -322,7 +322,7 @@ BEGIN
     UPDATE processes SET state = 'waiting', updated_at = now()
     WHERE state IN ('ready', 'running');
 END;
-$$ LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql SET search_path = @extschema@, pg_temp;
 
 
 CREATE OR REPLACE FUNCTION resume_all_waiting_processes(user_id INTEGER) RETURNS VOID AS $$
@@ -335,7 +335,7 @@ BEGIN
     UPDATE processes SET state = 'ready', updated_at = now()
     WHERE state = 'waiting';
 END;
-$$ LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql SET search_path = @extschema@, pg_temp;
 -------------
 -- SCHEDULER
 -------------
@@ -419,7 +419,7 @@ BEGIN
 
     END LOOP;
 END;
-$$ LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql SET search_path = @extschema@, pg_temp;
 
 
 -- thread scheduler
@@ -444,7 +444,7 @@ BEGIN
         UPDATE threads SET state='terminated', updated_at=now() WHERE id=next_thread.id;
     END LOOP;
 END;
-$$ LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql SET search_path = @extschema@, pg_temp;
 ---------
 -- LOCKS
 ---------
@@ -637,7 +637,7 @@ BEGIN
     INSERT INTO signals (process_id, signal_type) VALUES (target_process_id, signal_type);
     PERFORM log_process_action(target_process_id, 'Signal received: ' || signal_type);
 END;
-$$ LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql SET search_path = @extschema@, pg_temp;
 
 
 
@@ -660,7 +660,7 @@ BEGIN
         DELETE FROM signals WHERE id = sig.id;
     END LOOP;
 END;
-$$ LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql SET search_path = @extschema@, pg_temp;
 -----------------------------
 ----------
 -- MEMORY
@@ -712,7 +712,7 @@ CREATE OR REPLACE FUNCTION log_memory_action(process_id INTEGER, action TEXT, us
 BEGIN
     INSERT INTO memory_logs (process_id, action, performed_by, segment_id) VALUES (process_id, action, user_id, segment_id);
 END;
-$$ LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql SET search_path = @extschema@, pg_temp;
 
 -- Similarly, for memory allocation, use transactions and more verbose errors
 CREATE OR REPLACE FUNCTION allocate_memory(user_id INTEGER, process_id INTEGER, segment_size INTEGER) RETURNS VOID AS $$
@@ -782,7 +782,7 @@ BEGIN
         RAISE EXCEPTION 'Error allocating memory: %', SQLERRM;
     END;
 END;
-$$ LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql SET search_path = @extschema@, pg_temp;
  
 
 
@@ -825,7 +825,7 @@ BEGIN
     END IF;
     PERFORM log_memory_action(process_id, 'Memory freed: segment ' || segment_id, user_id, segment_id);
 END;
-$$ LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql SET search_path = @extschema@, pg_temp;
 
 -- allocate page to process
 CREATE OR REPLACE FUNCTION allocate_page(thread_id INTEGER) RETURNS BIGINT AS $$
@@ -868,7 +868,7 @@ BEGIN
 
     RETURN virtual_addr;
 END;
-$$ LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql SET search_path = @extschema@, pg_temp;
 --------------
 -- FILESYSTEM
 --------------
@@ -935,7 +935,7 @@ BEGIN
 
     RETURN new_file_id;
 END;
-$$ LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql SET search_path = @extschema@, pg_temp;
 
 
 -- Write to a file
@@ -965,7 +965,7 @@ BEGIN
     PERFORM version_file(file_id);
     UPDATE files SET contents = data WHERE id = file_id;
 END;
-$$ LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql SET search_path = @extschema@, pg_temp;
 
 
 -- Read from a file
@@ -995,7 +995,7 @@ BEGIN
     result := f.contents;
     RETURN result;
 END;
-$$ LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql SET search_path = @extschema@, pg_temp;
 
 
 -- Change file permissions (owner only)
@@ -1018,7 +1018,7 @@ BEGIN
 
     UPDATE files SET permissions = new_perms WHERE id = file_id;
 END;
-$$ LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql SET search_path = @extschema@, pg_temp;
 
 
 -- Lock a file
@@ -1066,7 +1066,7 @@ BEGIN
     INSERT INTO file_locks (file_id, locked_by_user, lock_mode)
     VALUES (lock_file.file_id, user_id, mode);
 END;
-$$ LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql SET search_path = @extschema@, pg_temp;
 
 
 -- Unlock a file
@@ -1076,7 +1076,7 @@ BEGIN
       WHERE file_locks.file_id = unlock_file.file_id
         AND file_locks.locked_by_user = unlock_file.user_id;
 END;
-$$ LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql SET search_path = @extschema@, pg_temp;
 
 
 -- Save a version of a file before write
@@ -1095,7 +1095,7 @@ BEGIN
      WHERE file_versions.file_id = version_file.file_id;
     INSERT INTO file_versions (file_id, version_number, contents) VALUES (file_id, max_version+1, f.contents);
 END;
-$$ LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql SET search_path = @extschema@, pg_temp;
 -------
 -- IPC
 -------
@@ -1135,7 +1135,7 @@ BEGIN
 
     INSERT INTO channels (name) VALUES (channel_name);
 END;
-$$ LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql SET search_path = @extschema@, pg_temp;
 
 
 -- Write to a channel
@@ -1155,7 +1155,7 @@ BEGIN
     INSERT INTO channel_messages (channel_id, sender_process_id, message) 
     VALUES (ch.id, sender_process_id, msg);
 END;
-$$ LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql SET search_path = @extschema@, pg_temp;
 
 
 -- Read from a channel (retrieve all new messages)
@@ -1175,7 +1175,7 @@ BEGIN
     RETURN QUERY SELECT message FROM channel_messages WHERE channel_id = ch.id ORDER BY timestamp;
     DELETE FROM channel_messages WHERE channel_id = ch.id;
 END;
-$$ LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql SET search_path = @extschema@, pg_temp;
 
 
 -- Send mail
@@ -1187,7 +1187,7 @@ BEGIN
 
     INSERT INTO mailbox (recipient_user_id, sender_user_id, message) VALUES (recipient_user_id, sender_user_id, msg);
 END;
-$$ LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql SET search_path = @extschema@, pg_temp;
 
 
 -- Check mail
@@ -1199,7 +1199,7 @@ BEGIN
 
     RETURN QUERY SELECT message FROM mailbox WHERE recipient_user_id = user_id ORDER BY timestamp;
 END;
-$$ LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql SET search_path = @extschema@, pg_temp;
 ---------
 -- AUDIT
 ---------
@@ -1237,7 +1237,7 @@ CREATE OR REPLACE FUNCTION log_file_action(file_id INTEGER, action TEXT, user_id
 BEGIN
     INSERT INTO file_logs (file_id, action, performed_by) VALUES (file_id, action, user_id);
 END;
-$$ LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql SET search_path = @extschema@, pg_temp;
 
 
 -- On fault, record the fault and possibly rollback to a checkpoint
@@ -1246,7 +1246,7 @@ BEGIN
     INSERT INTO faults (process_id, fault_type) VALUES (process_id, fault_type);
     -- Recovery logic would go here, like restoring from a checkpoint
 END;
-$$ LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql SET search_path = @extschema@, pg_temp;
 ----------------------
 -- GARBAGE COLLECTION
 ----------------------
@@ -1270,7 +1270,7 @@ BEGIN
            AND segment_id = seg_id;
     END LOOP;
 END;
-$$ LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql SET search_path = @extschema@, pg_temp;
 CREATE OR REPLACE FUNCTION cleanup_terminated_processes(timeout_interval INTERVAL DEFAULT '1 hour') RETURNS VOID AS $$
 DECLARE
     old_procs RECORD;
@@ -1292,7 +1292,7 @@ BEGIN
         -- In a real scenario, you might archive logs or process records here
     END LOOP;
 END;
-$$ LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql SET search_path = @extschema@, pg_temp;
 
 
 -------------------------
@@ -1326,7 +1326,7 @@ BEGIN
 
     INSERT INTO device_queue (device_id, request_type, data) VALUES (dev.id, request_type, data);
 END;
-$$ LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql SET search_path = @extschema@, pg_temp;
 
 CREATE OR REPLACE FUNCTION process_device_queue(device_name TEXT) RETURNS VOID AS $$
 DECLARE
@@ -1344,7 +1344,7 @@ BEGIN
         UPDATE device_queue SET completed=TRUE WHERE id=req.id;
     END LOOP;
 END;
-$$ LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql SET search_path = @extschema@, pg_temp;
 -------------------------
 -- NETWORKING
 -------------------------
@@ -1380,7 +1380,7 @@ BEGIN
     -- Just simulate logging the send
     RAISE NOTICE 'Sending packet from socket % to %: %', socket_id, s.connected_to, data;
 END;
-$$ LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql SET search_path = @extschema@, pg_temp;
 -----------
 -- MODULES
 -----------
@@ -1400,13 +1400,13 @@ BEGIN
     WHERE modules.module_name = load_module.module_name;
     -- In practice, you'd dynamically execute code or extend functionality
 END;
-$$ LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql SET search_path = @extschema@, pg_temp;
 
 CREATE OR REPLACE FUNCTION unload_module(module_name TEXT) RETURNS VOID AS $$
 BEGIN
     UPDATE modules SET loaded=FALSE WHERE modules.module_name = unload_module.module_name;
 END;
-$$ LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql SET search_path = @extschema@, pg_temp;
 --------------------
 -- POWER MANAGEMENT
 --------------------
@@ -1424,7 +1424,7 @@ BEGIN
     END IF;
     INSERT INTO power_states (state) VALUES (new_state);
 END;
-$$ LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql SET search_path = @extschema@, pg_temp;
 -- processes
 CREATE INDEX IF NOT EXISTS idx_processes_state ON processes(state);
 CREATE INDEX IF NOT EXISTS idx_processes_priority ON processes(priority);
@@ -1506,6 +1506,9 @@ CREATE INDEX IF NOT EXISTS idx_power_states_timestamp ON power_states(timestamp)
 -- role can manipulate kernel objects through the controlled API without being
 -- granted direct table access. Grant pgos_admin exactly the privileges those
 -- helpers need on the underlying tables and their identity sequences.
+-- USAGE on the install schema lets pgos_admin resolve those tables even when
+-- the extension lives in a non-default schema (PUBLIC only gets it for public).
+GRANT USAGE ON SCHEMA @extschema@ TO pgos_admin;
 GRANT SELECT, INSERT, UPDATE ON mutexes, semaphores TO pgos_admin;
 GRANT SELECT, UPDATE         ON threads, processes  TO pgos_admin;
 GRANT INSERT                 ON process_logs        TO pgos_admin;
