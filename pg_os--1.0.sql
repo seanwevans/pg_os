@@ -4,8 +4,8 @@
 
 DO $$
 BEGIN
-    IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'pg_os_admin') THEN
-        CREATE ROLE pg_os_admin;
+    IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'pgos_admin') THEN
+        CREATE ROLE pgos_admin;
     END IF;
 END;
 $$;
@@ -307,7 +307,7 @@ $$ LANGUAGE plpgsql;
 CREATE OR REPLACE FUNCTION process_count_by_state() RETURNS TABLE(state TEXT, count INTEGER) AS $$
 BEGIN
     RETURN QUERY
-    SELECT state, COUNT(*) FROM processes GROUP BY state;
+    SELECT processes.state, COUNT(*)::INTEGER FROM processes GROUP BY processes.state;
 END;
 $$ LANGUAGE plpgsql;
 
@@ -439,7 +439,9 @@ BEGIN
         -- Simulate thread execution
         UPDATE threads SET state='running', updated_at=now() WHERE id=next_thread.id;
         PERFORM pg_sleep(0.1); -- simulate shorter execution
-        UPDATE threads SET state='ready', updated_at=now() WHERE id=next_thread.id;
+        -- Mark the thread terminated so the scheduler makes progress and the
+        -- loop eventually drains all ready threads (otherwise it spins forever).
+        UPDATE threads SET state='terminated', updated_at=now() WHERE id=next_thread.id;
     END LOOP;
 END;
 $$ LANGUAGE plpgsql;
@@ -470,8 +472,8 @@ CREATE OR REPLACE FUNCTION create_mutex(mutex_name TEXT) RETURNS VOID AS $$
 BEGIN
     INSERT INTO mutexes (name) VALUES (mutex_name);
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, pg_temp;
-ALTER FUNCTION create_mutex(TEXT) OWNER TO pg_os_admin;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = @extschema@, pg_temp;
+ALTER FUNCTION create_mutex(TEXT) OWNER TO pgos_admin;
 GRANT EXECUTE ON FUNCTION create_mutex(TEXT) TO PUBLIC;
 
 
@@ -498,8 +500,8 @@ BEGIN
     -- Thread must wait
     UPDATE threads SET state = 'waiting', waiting_on_mutex = mutex_name, updated_at = now() WHERE id = thread_id;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, pg_temp;
-ALTER FUNCTION lock_mutex(INTEGER, TEXT) OWNER TO pg_os_admin;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = @extschema@, pg_temp;
+ALTER FUNCTION lock_mutex(INTEGER, TEXT) OWNER TO pgos_admin;
 GRANT EXECUTE ON FUNCTION lock_mutex(INTEGER, TEXT) TO PUBLIC;
 
 
@@ -523,8 +525,8 @@ BEGIN
         END IF;
     END IF;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, pg_temp;
-ALTER FUNCTION unlock_mutex(INTEGER, TEXT) OWNER TO pg_os_admin;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = @extschema@, pg_temp;
+ALTER FUNCTION unlock_mutex(INTEGER, TEXT) OWNER TO pgos_admin;
 GRANT EXECUTE ON FUNCTION unlock_mutex(INTEGER, TEXT) TO PUBLIC;
 
 
@@ -534,8 +536,8 @@ BEGIN
     INSERT INTO semaphores (name, count, max_count)
     VALUES (sem_name, initial_count, max_val);
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, pg_temp;
-ALTER FUNCTION create_semaphore(TEXT, INTEGER, INTEGER) OWNER TO pg_os_admin;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = @extschema@, pg_temp;
+ALTER FUNCTION create_semaphore(TEXT, INTEGER, INTEGER) OWNER TO pgos_admin;
 GRANT EXECUTE ON FUNCTION create_semaphore(TEXT, INTEGER, INTEGER) TO PUBLIC;
 
 
@@ -568,8 +570,8 @@ BEGIN
         PERFORM log_process_action(process_id, 'Waiting for semaphore: ' || sem_name);
     END IF;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, pg_temp;
-ALTER FUNCTION acquire_semaphore(INTEGER, TEXT) OWNER TO pg_os_admin;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = @extschema@, pg_temp;
+ALTER FUNCTION acquire_semaphore(INTEGER, TEXT) OWNER TO pgos_admin;
 GRANT EXECUTE ON FUNCTION acquire_semaphore(INTEGER, TEXT) TO PUBLIC;
 
 
@@ -602,8 +604,8 @@ BEGIN
         END IF;
     END IF;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, pg_temp;
-ALTER FUNCTION release_semaphore(INTEGER, TEXT) OWNER TO pg_os_admin;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = @extschema@, pg_temp;
+ALTER FUNCTION release_semaphore(INTEGER, TEXT) OWNER TO pgos_admin;
 GRANT EXECUTE ON FUNCTION release_semaphore(INTEGER, TEXT) TO PUBLIC;
 
 
@@ -634,7 +636,7 @@ CREATE OR REPLACE FUNCTION handle_signals(user_id INTEGER, process_id INTEGER) R
 DECLARE
     sig RECORD;
 BEGIN
-    FOR sig IN SELECT * FROM signals WHERE process_id = handle_signals.process_id LOOP
+    FOR sig IN SELECT * FROM signals WHERE signals.process_id = handle_signals.process_id LOOP
         IF sig.signal_type = 'SIGTERM' THEN
             PERFORM terminate_process(user_id, process_id);
         ELSIF sig.signal_type = 'SIGSTOP' THEN
@@ -796,8 +798,8 @@ BEGIN
             segment_missing := TRUE;
         ELSE
             DELETE FROM process_memory
-                WHERE process_id = free_memory.process_id
-                  AND segment_id = free_memory.segment_id;
+                WHERE process_memory.process_id = free_memory.process_id
+                  AND process_memory.segment_id = free_memory.segment_id;
             UPDATE memory_segments
                 SET allocated = FALSE, allocated_to = NULL
                 WHERE id = free_memory.segment_id;
@@ -907,7 +909,7 @@ BEGIN
         SELECT *
           INTO parent_record
           FROM files
-         WHERE id = parent_id;
+         WHERE files.id = create_file.parent_id;
 
         IF NOT FOUND THEN
             RAISE EXCEPTION 'Parent directory % does not exist', parent_id;
@@ -1062,8 +1064,8 @@ $$ LANGUAGE plpgsql;
 CREATE OR REPLACE FUNCTION unlock_file(user_id INTEGER, file_id INTEGER) RETURNS VOID AS $$
 BEGIN
     DELETE FROM file_locks
-      WHERE file_id = unlock_file.file_id
-        AND locked_by_user = unlock_file.user_id;
+      WHERE file_locks.file_id = unlock_file.file_id
+        AND file_locks.locked_by_user = unlock_file.user_id;
 END;
 $$ LANGUAGE plpgsql;
 
@@ -1079,7 +1081,9 @@ BEGIN
         RAISE EXCEPTION 'File not found';
     END IF;
 
-    SELECT COALESCE(MAX(version_number),0) INTO max_version FROM file_versions WHERE file_id=file_id;
+    SELECT COALESCE(MAX(version_number),0) INTO max_version
+      FROM file_versions
+     WHERE file_versions.file_id = version_file.file_id;
     INSERT INTO file_versions (file_id, version_number, contents) VALUES (file_id, max_version+1, f.contents);
 END;
 $$ LANGUAGE plpgsql;
@@ -1484,3 +1488,16 @@ CREATE INDEX IF NOT EXISTS idx_modules_loaded ON modules(loaded);
 -- power
 CREATE INDEX IF NOT EXISTS idx_power_states_state ON power_states(state);
 CREATE INDEX IF NOT EXISTS idx_power_states_timestamp ON power_states(timestamp);
+
+-- ---------------------------------------------------------------------------
+-- Privileges for the SECURITY DEFINER concurrency helpers
+-- ---------------------------------------------------------------------------
+-- create_mutex/lock_mutex/unlock_mutex/create_semaphore/acquire_semaphore/
+-- release_semaphore run as their owner (pgos_admin) so that an unprivileged
+-- role can manipulate kernel objects through the controlled API without being
+-- granted direct table access. Grant pgos_admin exactly the privileges those
+-- helpers need on the underlying tables and their identity sequences.
+GRANT SELECT, INSERT, UPDATE ON mutexes, semaphores TO pgos_admin;
+GRANT SELECT, UPDATE         ON threads, processes  TO pgos_admin;
+GRANT INSERT                 ON process_logs        TO pgos_admin;
+GRANT USAGE ON SEQUENCE mutexes_id_seq, semaphores_id_seq, process_logs_id_seq TO pgos_admin;

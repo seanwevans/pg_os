@@ -1,20 +1,43 @@
 name: CI
+
 on:
   push:
   pull_request:
+
 jobs:
   test:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install PostgreSQL and headers
+      - name: Install PostgreSQL and development headers
         run: |
           sudo apt-get update
-          # Install the server, contrib modules and the development headers
-          sudo apt-get install -y postgresql postgresql-contrib libpq-dev postgresql-server-dev-16
+          # Server, contrib modules, client library and the PGXS build headers
+          sudo apt-get install -y postgresql postgresql-contrib libpq-dev postgresql-server-dev-all
 
       - name: Start PostgreSQL
         run: |
-          # Determine the installed major version and start the cluster
-          sudo pg_ctlcluster $(pg_config --version | awk '{print $2}' | cut -d. -f1) main start
+          # Determine the installed major version and start the default cluster
+          PG_MAJOR=$(pg_config --version | awk '{print $2}' | cut -d. -f1)
+          echo "PG_MAJOR=$PG_MAJOR" >> "$GITHUB_ENV"
+          sudo pg_ctlcluster "$PG_MAJOR" main start
+
+      - name: Create a superuser role for the runner
+        run: |
+          # pg_regress connects over the local socket as the current OS user via
+          # peer authentication, so that user needs a matching superuser role.
+          sudo -u postgres createuser --superuser "$(whoami)"
+          sudo -u postgres createdb "$(whoami)"
+
+      - name: Build and install the extension
+        run: |
+          make
+          sudo make install
+
+      - name: Run regression tests
+        run: make installcheck
+
+      - name: Show regression diffs on failure
+        if: failure()
+        run: cat tmp_pg_os_regress/regression.diffs || true
