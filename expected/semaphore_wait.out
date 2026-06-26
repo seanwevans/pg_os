@@ -1,0 +1,57 @@
+-- tests for semaphore wait/wake behaviour across processes
+\set ECHO none
+SELECT create_user('sem_user') AS uid 
+INSERT INTO processes (name, state, owner_user_id)
+VALUES ('sem_p1', 'running', 1)
+RETURNING id AS p1 
+INSERT INTO processes (name, state, owner_user_id)
+VALUES ('sem_p2', 'running', 1)
+RETURNING id AS p2 
+SELECT create_semaphore('sem', 1, 1);
+ create_semaphore 
+------------------
+ 
+(1 row)
+
+SELECT acquire_semaphore(1, 'sem');
+ acquire_semaphore 
+-------------------
+ 
+(1 row)
+
+SELECT count FROM semaphores WHERE name = 'sem';
+ count 
+-------
+     0
+(1 row)
+
+SELECT acquire_semaphore(2, 'sem');
+ acquire_semaphore 
+-------------------
+ 
+(1 row)
+
+SELECT state, waiting_on_semaphore FROM processes WHERE id = 2;
+  state  | waiting_on_semaphore 
+---------+----------------------
+ waiting | sem
+(1 row)
+
+SELECT release_semaphore(1, 'sem');
+ release_semaphore 
+-------------------
+ 
+(1 row)
+
+SELECT state, waiting_on_semaphore FROM processes WHERE id = 2;
+ state | waiting_on_semaphore 
+-------+----------------------
+ ready | 
+(1 row)
+
+SELECT count FROM semaphores WHERE name = 'sem';
+ count 
+-------
+     1
+(1 row)
+
